@@ -1,3 +1,3 @@
 # Cookie
 
-Cookie is a cookie-themed social messaging web app.
+A cookie-themed social messaging web app with real accounts, friends, messaging, and Crumbs.
