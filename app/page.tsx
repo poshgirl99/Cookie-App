@@ -47,8 +47,21 @@ export default function Home() {
   const loadAccount = useCallback(async (account: User | null) => {
     setUser(account);
     if (!account) { setProfile(null); setRequests([]); setFriends([]); return; }
-    const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour").eq("id", account.id).single();
-    setProfile(data);
+    const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour").eq("id", account.id).maybeSingle();
+    let currentProfile = data as Profile | null;
+    if (!currentProfile) {
+      const emailName = account.email?.split("@")[0] || "cookie";
+      const base = String(account.user_metadata?.username || emailName).toLowerCase().replace(/[^a-z0-9._]/g, "").slice(0, 18) || "cookie";
+      const fallback = {
+        id: account.id,
+        username: `${base}_${account.id.slice(0, 6)}`,
+        display_name: String(account.user_metadata?.display_name || emailName),
+        profile_colour: colours[0],
+      };
+      const { data: created } = await supabase.from("profiles").upsert(fallback).select("id,username,display_name,profile_colour").single();
+      currentProfile = (created as Profile | null) ?? fallback;
+    }
+    setProfile(currentProfile);
 
     const { data: incoming } = await supabase
       .from("friend_requests")
@@ -157,7 +170,7 @@ export default function Home() {
       {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button onClick={()=>addFriend(person)}>Add friend</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small></div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
       {view === "crumbs" && <div className="coming"><span>🍪</span><h1>Crumbs</h1><p>Your full-screen For You and Following feeds are coming next.</p></div>}
       {view === "stories" && <div className="coming"><span>✨</span><h1>Stories</h1><p>Nothing here yet. Your friends’ stories will appear here.</p></div>}
-      {view === "profile" && <div className="profile-page"><div className="profile-hero"><CookieLogo/><Avatar person={profile!}/></div><h1>{profile?.display_name}</h1><p>@{profile?.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div><button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
+      {view === "profile" && <div className="profile-page">{profile ? <><div className="profile-hero"><CookieLogo/><Avatar person={profile}/></div><h1>{profile.display_name}</h1><p>@{profile.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div></> : <div className="coming"><span>🍪</span><h1>Loading your profile…</h1></div>}<button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
     </section>
     <nav>{([{id:"chats",icon:"◒",label:"Chats"},{id:"friends",icon:"＋",label:"Friends"},{id:"crumbs",icon:"●",label:"Crumbs"},{id:"stories",icon:"◉",label:"Stories"},{id:"profile",icon:"○",label:"Profile"}] as const).map(item=><button key={item.id} className={view===item.id?"active":""} onClick={()=>setView(item.id)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
   </div></main>;
