@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase";
 
@@ -43,6 +43,7 @@ export default function Home() {
   const [results, setResults] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
+  const searchSequence = useRef(0);
 
   const loadAccount = useCallback(async (account: User | null) => {
     setUser(account);
@@ -115,10 +116,15 @@ export default function Home() {
 
   async function searchPeople(value: string) {
     setSearch(value);
-    if (!value.trim() || !user) { setResults([]); return; }
-    const term = value.toLowerCase().replace(/^@/, "");
-    const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour").ilike("username", `%${term}%`).neq("id", user.id).limit(20);
-    setResults(data ?? []);
+    const sequence = ++searchSequence.current;
+    const term = value.trim().toLowerCase().replace(/^@/, "");
+    if (!term || !user) { setResults([]); setNotice(""); return; }
+    const { data, error } = await supabase.from("profiles").select("id,username,display_name,profile_colour").ilike("username", `${term}%`).limit(20);
+    if (sequence !== searchSequence.current) return;
+    if (error) { setResults([]); setNotice(`Search failed: ${error.message}`); return; }
+    const matches = (data ?? []).filter(person => person.id !== user.id);
+    setResults(matches);
+    setNotice(matches.length ? "" : `No Cookie user found for @${term}.`);
   }
 
   async function addFriend(person: Profile) {
