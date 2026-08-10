@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase";
@@ -20,7 +19,7 @@ const flavours = [
 ];
 
 function CookieLogo({ small = false }: { small?: boolean }) {
-  return <span className={`cookie-logo ${small ? "small" : ""}`}><Image src="/cookie-logo-deeper-bite.png" alt="Cookie" width={180} height={180} priority /></span>;
+  return <span className={`cookie-logo ${small ? "small" : ""}`}><img src="/cookie-logo-deeper-bite.png" alt="Cookie" width={180} height={180} /></span>;
 }
 
 export default function Home() {
