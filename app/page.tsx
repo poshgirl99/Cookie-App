@@ -44,11 +44,12 @@ export default function Home() {
   const [results, setResults] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
+  const [sentRequestIds, setSentRequestIds] = useState<string[]>([]);
   const searchSequence = useRef(0);
 
   const loadAccount = useCallback(async (account: User | null) => {
     setUser(account);
-    if (!account) { setProfile(null); setRequests([]); setFriends([]); return; }
+    if (!account) { setProfile(null); setRequests([]); setFriends([]); setSentRequestIds([]); return; }
     const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour").eq("id", account.id).maybeSingle();
     let currentProfile = data as Profile | null;
     if (!currentProfile) {
@@ -70,6 +71,12 @@ export default function Home() {
       .select("id,requester_id,recipient_id,status,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour)")
       .eq("recipient_id", account.id).eq("status", "pending");
     setRequests((incoming ?? []).map((item: Record<string, unknown>) => ({ ...item, requester: Array.isArray(item.requester) ? item.requester[0] : item.requester })) as FriendRequest[]);
+
+    const { data: outgoing } = await supabase
+      .from("friend_requests")
+      .select("recipient_id")
+      .eq("requester_id", account.id).eq("status", "pending");
+    setSentRequestIds((outgoing ?? []).map(item => item.recipient_id));
 
     const { data: accepted } = await supabase
       .from("friend_requests")
@@ -165,7 +172,13 @@ export default function Home() {
     if (!user) return;
     setNotice("");
     const { error } = await supabase.from("friend_requests").insert({ requester_id: user.id, recipient_id: person.id });
-    setNotice(error ? (error.code === "23505" ? "A friend request already exists between you." : error.message) : `Friend request sent to @${person.username}!`);
+    if (error) {
+      setNotice(error.code === "23505" ? "A friend request already exists between you." : error.message);
+      if (error.code === "23505") setSentRequestIds(current => current.includes(person.id) ? current : [...current, person.id]);
+      return;
+    }
+    setSentRequestIds(current => [...current, person.id]);
+    setNotice(`Friend request sent to @${person.username}!`);
   }
 
   async function answerRequest(request: FriendRequest, status: "accepted" | "declined" | "blocked") {
@@ -208,7 +221,7 @@ export default function Home() {
     <header><button className="brand" onClick={()=>setView("chats")}><CookieLogo small/><b>Cookie</b></button><div><button aria-label="Notifications">♢{requests.length>0&&<i/>}</button><button className="mini-avatar" onClick={()=>setView("profile")} style={{background:profile?.profile_colour}}>{profile?.display_name?.[0]||"C"}</button></div></header>
     <section className="app-screen">
       {view === "chats" && <div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/></div>}
-      {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button onClick={()=>addFriend(person)}>Add friend</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small></div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
+      {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={friends.some(friend=>friend.id===person.id)||sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{friends.some(friend=>friend.id===person.id)?"Friends":sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small></div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
       {view === "crumbs" && <div className="coming"><span>🍪</span><h1>Crumbs</h1><p>Your full-screen For You and Following feeds are coming next.</p></div>}
       {view === "stories" && <div className="coming"><span>✨</span><h1>Stories</h1><p>Nothing here yet. Your friends’ stories will appear here.</p></div>}
       {view === "profile" && <div className="profile-page">{profile ? <><div className="profile-hero"><CookieLogo/><Avatar person={profile}/></div><h1>{profile.display_name}</h1><p>@{profile.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div></> : <div className="coming"><span>🍪</span><h1>Loading your profile…</h1></div>}<button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
