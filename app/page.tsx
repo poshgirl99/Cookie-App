@@ -114,6 +114,18 @@ export default function Home() {
     if (error) setNotice(error.message);
   }
 
+  async function resendConfirmation() {
+    if (!email) { setNotice("Enter your email first."); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setBusy(false);
+    setNotice(error ? error.message : "Confirmation email resent. Check your inbox and spam folder. 🍪");
+  }
+
   async function searchPeople(value: string) {
     setSearch(value);
     const sequence = ++searchSequence.current;
@@ -156,6 +168,7 @@ export default function Home() {
         <button className="primary" disabled={busy}>{busy ? "Opening Cookie…" : "Sign in →"}</button>
         <div className="or"><span/>or<span/></div><button type="button" className="google" onClick={googleSignIn}><b>G</b> Continue with Google</button>
         {notice && <p className="notice">{notice}</p>}
+        {notice.toLowerCase().includes("email not confirmed") && <button type="button" className="google" disabled={busy} onClick={resendConfirmation}>Resend confirmation email</button>}
         <p className="switch">New to Cookie? <button type="button" onClick={() => { setAuthMode("signup"); setNotice(""); }}>Create your account</button></p>
       </form> : <div className="poll-card" key={signupStep}>
         <div className="poll-top"><button onClick={() => signupStep ? setSignupStep(signupStep - 1) : setAuthMode("signin")}>←</button><span>{signupStep + 1} of 5</span></div>
