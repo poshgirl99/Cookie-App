@@ -84,8 +84,22 @@ export default function Home() {
 
   useEffect(() => {
     const splashTimer = window.setTimeout(() => setShowSplash(false), 1500);
-    supabase.auth.getUser().then(({ data }) => loadAccount(data.user)).catch(() => loadAccount(null));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => loadAccount(session?.user ?? null));
+    const initialiseAuth = async () => {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        url.searchParams.delete("code");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+        if (error) setNotice(`Google sign-in failed: ${error.message}`);
+      }
+      const { data } = await supabase.auth.getUser();
+      await loadAccount(data.user);
+    };
+    initialiseAuth().catch(error => { setNotice(`Sign-in failed: ${String(error)}`); loadAccount(null); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => { void loadAccount(session?.user ?? null); }, 0);
+    });
     return () => { window.clearTimeout(splashTimer); listener.subscription.unsubscribe(); };
   }, [loadAccount, supabase]);
 
