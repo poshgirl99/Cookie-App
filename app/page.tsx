@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase";
 
 type Profile = { id: string; username: string; display_name: string; profile_colour: string; avatar_url: string | null; cover_url: string | null };
 type FriendRequest = { id: string; requester_id: string; recipient_id: string; status: string; introduction_message?: string | null; requester?: Profile };
-type Conversation = { id: string; disappearing_mode: "after_viewing" | "24_hours" | "2_days" | "never"; person: Profile; person_last_read_at?: string | null; last_message?: string; last_message_at?: string };
+type Conversation = { id: string; disappearing_mode: "after_viewing" | "24_hours" | "2_days" | "never"; person: Profile; person_last_read_at?: string | null; last_message_at?: string; last_sender_id?: string; unread_count: number };
 type Reaction = { emoji: string; user_id: string };
 type ChatMessage = { id: string; conversation_id: string; sender_id: string; body: string; reply_to_id: string | null; created_at: string; edited_at: string | null; deleted_for_everyone_at: string | null; expires_at: string | null; reactions?: Reaction[]; reply?: { id: string; body: string; sender_id: string } | null };
 type AuthMode = "signin" | "signup";
@@ -71,20 +71,22 @@ export default function Home() {
   const swipeStart = useRef<{x:number;y:number}|null>(null);
 
   const loadConversations = useCallback(async (accountId: string) => {
-    const { data: ownMemberships } = await supabase.from("conversation_members").select("conversation_id").eq("user_id", accountId);
+    const { data: ownMemberships } = await supabase.from("conversation_members").select("conversation_id,last_read_at").eq("user_id", accountId);
     const ids = (ownMemberships ?? []).map(item => item.conversation_id);
     if (!ids.length) { setConversations([]); return; }
     const [{ data: chatRows }, { data: members }, { data: recent }] = await Promise.all([
       supabase.from("conversations").select("id,disappearing_mode").in("id", ids),
       supabase.from("conversation_members").select("conversation_id,user_id,last_read_at,profile:profiles(id,username,display_name,profile_colour,avatar_url,cover_url)").in("conversation_id", ids).neq("user_id", accountId),
-      supabase.from("messages").select("conversation_id,body,created_at,deleted_for_everyone_at").in("conversation_id", ids).order("created_at", { ascending:false }).limit(200),
+      supabase.from("messages").select("conversation_id,sender_id,created_at").in("conversation_id", ids).order("created_at", { ascending:false }).limit(1000),
     ]);
     const list = (chatRows ?? []).map(row => {
       const member = (members ?? []).find(item => item.conversation_id === row.id);
       const personValue = member?.profile;
       const person = (Array.isArray(personValue) ? personValue[0] : personValue) as Profile | undefined;
       const last = (recent ?? []).find(item => item.conversation_id === row.id);
-      return person ? { id:row.id, disappearing_mode:row.disappearing_mode, person, person_last_read_at:member?.last_read_at, last_message:last?.deleted_for_everyone_at?"Message deleted":last?.body, last_message_at:last?.created_at } as Conversation : null;
+      const ownLastRead = (ownMemberships ?? []).find(item=>item.conversation_id===row.id)?.last_read_at;
+      const unreadCount = (recent ?? []).filter(item=>item.conversation_id===row.id&&item.sender_id!==accountId&&(!ownLastRead||item.created_at>ownLastRead)).length;
+      return person ? { id:row.id, disappearing_mode:row.disappearing_mode, person, person_last_read_at:member?.last_read_at, last_message_at:last?.created_at, last_sender_id:last?.sender_id, unread_count:unreadCount } as Conversation : null;
     }).filter(Boolean) as Conversation[];
     setConversations(list.sort((a,b)=>(b.last_message_at||"").localeCompare(a.last_message_at||"")));
   }, [supabase]);
@@ -188,6 +190,15 @@ export default function Home() {
       .subscribe();
     return ()=>{void supabase.removeChannel(channel);};
   },[activeChat,loadMessages,supabase]);
+
+  useEffect(()=>{
+    if (!user) return;
+    const channel=supabase.channel(`cookie-chat-list-${user.id}`)
+      .on("postgres_changes",{event:"*",schema:"public",table:"messages"},()=>void loadConversations(user.id))
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"conversation_members"},()=>void loadConversations(user.id))
+      .subscribe();
+    return ()=>{void supabase.removeChannel(channel);};
+  },[loadConversations,supabase,user]);
 
   async function signIn(event: FormEvent) {
     event.preventDefault(); setBusy(true); setNotice("");
@@ -324,7 +335,7 @@ export default function Home() {
     const { error:memberError }=await supabase.from("conversation_members").insert([{conversation_id:created.id,user_id:user.id},{conversation_id:created.id,user_id:person.id}]);
     setBusy(false);
     if (memberError) { setNotice(memberError.message); return null; }
-    const chat:Conversation={...created,person};
+    const chat:Conversation={...created,person,unread_count:0};
     setConversations(current=>[chat,...current]); setActiveChat(chat); setView("chats"); return chat;
   }
 
@@ -413,7 +424,7 @@ export default function Home() {
     <header><button className="brand" onClick={()=>setView("chats")}><CookieLogo small/><b>Cookie</b></button><div><button aria-label="Notifications">♢{requests.length>0&&<i/>}</button><button className="mini-avatar" onClick={()=>setView("profile")} style={{background:profile?.profile_colour}}>{profile?.avatar_url?<img src={profile.avatar_url} alt="" />:profile?.display_name?.[0]||"C"}</button></div></header>
     <section className="app-screen">
       {view === "chats" && (activeChat?<div className="chat-pane">
-        <div className="chat-head"><button className="chat-back" onClick={()=>{setActiveChat(null);setSelectedMessage(null)}}>‹</button><Avatar person={activeChat.person}/><div><b>{activeChat.person.display_name}</b><small>@{activeChat.person.username}</small></div><select aria-label="Automatic message deletion" value={activeChat.disappearing_mode} onChange={event=>changeDisappearingMode(event.target.value as Conversation["disappearing_mode"])}><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select></div>
+        <div className="chat-head"><button className="chat-back" onClick={()=>{setActiveChat(null);setSelectedMessage(null);void loadConversations(user.id)}}>‹</button><Avatar person={activeChat.person}/><div><b>{activeChat.person.display_name}</b><small>@{activeChat.person.username}</small></div><select aria-label="Automatic message deletion" value={activeChat.disappearing_mode} onChange={event=>changeDisappearingMode(event.target.value as Conversation["disappearing_mode"])}><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select></div>
         {pinnedMessageIds.length>0&&<div className="pinned-strip">📌 {pinnedMessageIds.length} pinned message{pinnedMessageIds.length>1?"s":""}</div>}
         <div className="message-stream">{messages.filter(message=>!hiddenMessageIds.includes(message.id)&&(!message.expires_at||new Date(message.expires_at).getTime()>Date.now())).map(message=>{
           const mine=message.sender_id===user.id; const system=message.body.startsWith("__system__:"); const intro=message.body.startsWith("__intro__:");
@@ -429,7 +440,7 @@ export default function Home() {
             {selectedMessage?.id===message.id&&<div className="message-actions"><div className="quick-reactions">{["🍪","❤️","😂","😮","😢","👍"].map(emoji=><button key={emoji} onClick={()=>reactToMessage(message,emoji)}>{emoji}</button>)}<button onClick={()=>{const emoji=window.prompt("Choose an emoji");if(emoji)void reactToMessage(message,emoji)}}>＋</button></div><button onClick={()=>togglePin(message)}>{pinnedMessageIds.includes(message.id)?"Unpin":"Pin"}</button>{mine&&Date.now()-new Date(message.created_at).getTime()<900000&&<button onClick={()=>editMessage(message)}>Edit</button>}<button onClick={()=>deleteMessage(message,false)}>Delete for me</button>{mine&&<button onClick={()=>deleteMessage(message,true)}>Delete for everyone</button>}</div>}
           </div>})}</div>
         <div className="chat-compose">{replyingTo&&<div className="replying"><span>Replying to <b>{replyingTo.sender_id===user.id?"yourself":activeChat.person.display_name}</b><small>{replyingTo.body.slice(0,90)}</small></span><button onClick={()=>setReplyingTo(null)}>×</button></div>}{emojiPickerOpen&&<div className="emoji-picker"><div className="emoji-tabs">{(Object.keys(emojiGroups) as Array<keyof typeof emojiGroups>).map(category=><button key={category} className={emojiCategory===category?"active":""} onClick={()=>setEmojiCategory(category)}>{category}</button>)}</div><div className="emoji-grid">{emojiGroups[emojiCategory].map((emoji,index)=><button key={`${emoji}-${index}`} onClick={()=>setMessageText(current=>current+emoji)}>{emoji}</button>)}</div></div>}<div className="compose-row"><button className={emojiPickerOpen?"picker-active":""} title="Open emoji picker" aria-label="Open emoji picker" onClick={()=>setEmojiPickerOpen(current=>!current)}>☺</button><button className="attach" title="Photos, files, voice, location, contacts, polls and events">＋</button><input value={messageText} onChange={event=>setMessageText(event.target.value)} onFocus={()=>setEmojiPickerOpen(false)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void sendMessage()}}} placeholder="Message…"/><button className="send" disabled={!messageText.trim()} onClick={()=>sendMessage()}>➤</button></div></div>
-      </div>:<div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="crumb-legend"><CrumbStatus/><span>Sent</span><CrumbStatus delivered/><span>Delivered</span><CrumbStatus read/><span>Read</span></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}{conversations.length>0?<div className="chat-list">{conversations.map(chat=><button key={chat.id} onClick={()=>setActiveChat(chat)}><Avatar person={chat.person}/><span><b>{chat.person.display_name}</b><small>{chat.last_message?.replace(/^__(system|intro)__:[^:]*:?/,"")||"Start chatting 🍪"}</small></span><i>›</i></button>)}</div>:<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/>}</div>)}
+      </div>:<div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="crumb-legend"><CrumbStatus/><span>Sent</span><CrumbStatus delivered/><span>Delivered</span><CrumbStatus read/><span>Read</span></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}{conversations.length>0?<div className="chat-list">{conversations.map(chat=>{const read=Boolean(chat.last_message_at&&chat.person_last_read_at&&chat.person_last_read_at>chat.last_message_at);const hasMessage=Boolean(chat.last_message_at);return <button key={chat.id} onClick={()=>setActiveChat(chat)}><Avatar person={chat.person}/><span><b>{chat.person.display_name}</b><small className={chat.unread_count?"new-chat":""}>{chat.unread_count?(chat.unread_count===1?"New Chat":"New Chats"):hasMessage&&chat.last_sender_id===user.id?<><CrumbStatus delivered read={read}/>{read?"Read":"Delivered"}</>:hasMessage?"Received":"Start chatting 🍪"}</small></span><i>›</i></button>})}</div>:<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/>}</div>)}
       {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={friends.some(friend=>friend.id===person.id)||sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{friends.some(friend=>friend.id===person.id)?"Friends":sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small>{request.introduction_message&&<em>“{request.introduction_message}”</em>}</div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button onClick={()=>openChat(person)}>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
       {view === "crumbs" && <div className="coming"><span>🍪</span><h1>Crumbs</h1><p>Your full-screen For You and Following feeds are coming next.</p></div>}
       {view === "stories" && <div className="coming"><span>✨</span><h1>Stories</h1><p>Nothing here yet. Your friends’ stories will appear here.</p></div>}
