@@ -88,10 +88,15 @@ export default function Home() {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data: existing } = await supabase.auth.getSession();
+        if (!existing.session) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error && !error.message.toLowerCase().includes("code verifier")) {
+            setNotice(`Google sign-in failed: ${error.message}`);
+          }
+        }
         url.searchParams.delete("code");
         window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-        if (error) setNotice(`Google sign-in failed: ${error.message}`);
       }
       const { data } = await supabase.auth.getUser();
       await loadAccount(data.user);
