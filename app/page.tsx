@@ -82,7 +82,7 @@ export default function Home() {
   }, [supabase]);
 
   useEffect(() => {
-    const splashTimer = window.setTimeout(() => setShowSplash(false), 5000);
+    const splashTimer = window.setTimeout(() => setShowSplash(false), 1500);
     supabase.auth.getUser().then(({ data }) => loadAccount(data.user)).catch(() => loadAccount(null));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => loadAccount(session?.user ?? null));
     return () => { window.clearTimeout(splashTimer); listener.subscription.unsubscribe(); };
