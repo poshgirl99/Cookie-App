@@ -1,14 +1,14 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { RealtimeChannel, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase";
 
 type Profile = { id: string; username: string; display_name: string; profile_colour: string; avatar_url: string | null; cover_url: string | null };
 type FriendRequest = { id: string; requester_id: string; recipient_id: string; status: string; introduction_message?: string | null; requester?: Profile };
 type Conversation = { id: string; disappearing_mode: "after_viewing" | "24_hours" | "2_days" | "never"; person: Profile; person_last_read_at?: string | null; last_message_at?: string; last_sender_id?: string; unread_count: number };
 type Reaction = { emoji: string; user_id: string };
-type ChatMessage = { id: string; conversation_id: string; sender_id: string; body: string; reply_to_id: string | null; created_at: string; edited_at: string | null; deleted_for_everyone_at: string | null; expires_at: string | null; reactions?: Reaction[]; reply?: { id: string; body: string; sender_id: string } | null };
+type ChatMessage = { id: string; conversation_id: string; sender_id: string; body: string; reply_to_id: string | null; created_at: string; edited_at: string | null; deleted_for_everyone_at: string | null; expires_at: string | null; audio_url?: string | null; reactions?: Reaction[]; reply?: { id: string; body: string; sender_id: string } | null };
 type AuthMode = "signin" | "signup";
 type AppView = "chats" | "friends" | "crumbs" | "stories" | "profile";
 
@@ -56,6 +56,7 @@ export default function Home() {
   const [results, setResults] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [sentRequestIds, setSentRequestIds] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
@@ -67,8 +68,16 @@ export default function Home() {
   const [emojiCategory, setEmojiCategory] = useState<keyof typeof emojiGroups>("😊");
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null);
+  const [peerActivity, setPeerActivity] = useState<"typing" | "recording" | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const searchSequence = useRef(0);
   const swipeStart = useRef<{x:number;y:number}|null>(null);
+  const activityChannel = useRef<RealtimeChannel | null>(null);
+  const activityTimer = useRef<number | null>(null);
+  const peerActivityTimer = useRef<number | null>(null);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
 
   const loadConversations = useCallback(async (accountId: string) => {
     const { data: ownMemberships } = await supabase.from("conversation_members").select("conversation_id,last_read_at").eq("user_id", accountId);
@@ -93,7 +102,7 @@ export default function Home() {
 
   const loadAccount = useCallback(async (account: User | null) => {
     setUser(account);
-    if (!account) { setProfile(null); setRequests([]); setFriends([]); setSentRequestIds([]); setConversations([]); setActiveChat(null); return; }
+    if (!account) { setProfile(null); setRequests([]); setFriends([]); setAllProfiles([]); setSentRequestIds([]); setConversations([]); setActiveChat(null); return; }
     const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour,avatar_url,cover_url").eq("id", account.id).maybeSingle();
     let currentProfile = data as Profile | null;
     if (!currentProfile) {
@@ -133,8 +142,15 @@ export default function Home() {
       return (Array.isArray(value) ? value[0] : value) as Profile;
     }).filter(Boolean);
     setFriends(list);
+    const { data: directory } = await supabase.from("profiles").select("id,username,display_name,profile_colour,avatar_url,cover_url").neq("id",account.id).order("display_name").limit(200);
+    setAllProfiles((directory ?? []) as Profile[]);
     await loadConversations(account.id);
   }, [loadConversations, supabase]);
+
+  useEffect(() => {
+    const clock=window.setInterval(()=>setNow(Date.now()),1000);
+    return ()=>window.clearInterval(clock);
+  },[]);
 
   useEffect(() => {
     const splashTimer = window.setTimeout(() => setShowSplash(false), 1500);
@@ -174,22 +190,33 @@ export default function Home() {
     setHiddenMessageIds((hidden ?? []).map(item=>item.message_id));
     setPinnedMessageIds((pins ?? []).map(item=>item.message_id));
     const rawRows=(rows ?? []) as Array<Record<string, unknown>>;
-    setMessages(rawRows.map(item=>{
+    const hydrated=await Promise.all(rawRows.map(async item=>{
       const repliedTo=item.reply_to_id ? rawRows.find(candidate=>candidate.id===item.reply_to_id) : null;
-      return { ...item, reply:repliedTo ? { id:String(repliedTo.id), body:String(repliedTo.body||""), sender_id:String(repliedTo.sender_id) } : null } as ChatMessage;
+      const audioPath=String(item.body||"").startsWith("__audio__:")?String(item.body).slice(10):null;
+      const { data:signed }=audioPath?await supabase.storage.from("voice-notes").createSignedUrl(audioPath,3600):{data:null};
+      return { ...item, audio_url:signed?.signedUrl||null, reply:repliedTo ? { id:String(repliedTo.id), body:String(repliedTo.body||""), sender_id:String(repliedTo.sender_id) } : null } as ChatMessage;
     }));
+    setMessages(hydrated);
     await supabase.from("conversation_members").update({ last_read_at:new Date().toISOString() }).eq("conversation_id",conversationId).eq("user_id",user.id);
   }, [supabase,user]);
 
   useEffect(()=>{
-    if (!activeChat) return;
+    if (!activeChat || !user) return;
     void loadMessages(activeChat.id);
-    const channel=supabase.channel(`cookie-chat-${activeChat.id}`)
+    void supabase.realtime.setAuth();
+    const channel=supabase.channel(`conversation:${activeChat.id}`,{config:{private:true}})
       .on("postgres_changes",{event:"*",schema:"public",table:"messages",filter:`conversation_id=eq.${activeChat.id}`},()=>void loadMessages(activeChat.id))
       .on("postgres_changes",{event:"*",schema:"public",table:"message_reactions"},()=>void loadMessages(activeChat.id))
+      .on("broadcast",{event:"activity"},({payload})=>{
+        if(payload.user_id===user.id)return;
+        setPeerActivity(payload.state||null);
+        if(peerActivityTimer.current)window.clearTimeout(peerActivityTimer.current);
+        if(payload.state)peerActivityTimer.current=window.setTimeout(()=>setPeerActivity(null),3500);
+      })
       .subscribe();
-    return ()=>{void supabase.removeChannel(channel);};
-  },[activeChat,loadMessages,supabase]);
+    activityChannel.current=channel;
+    return ()=>{activityChannel.current=null;setPeerActivity(null);if(peerActivityTimer.current)window.clearTimeout(peerActivityTimer.current);void supabase.removeChannel(channel);};
+  },[activeChat,loadMessages,supabase,user]);
 
   useEffect(()=>{
     if (!user) return;
@@ -339,9 +366,44 @@ export default function Home() {
     setConversations(current=>[chat,...current]); setActiveChat(chat); setView("chats"); return chat;
   }
 
+  function broadcastActivity(state:"typing"|"recording"|null){
+    if(!user||!activityChannel.current)return;
+    void activityChannel.current.send({type:"broadcast",event:"activity",payload:{user_id:user.id,state}});
+  }
+
+  function updateMessageText(value:string){
+    setMessageText(value);
+    broadcastActivity(value.trim()?"typing":null);
+    if(activityTimer.current)window.clearTimeout(activityTimer.current);
+    if(value.trim())activityTimer.current=window.setTimeout(()=>broadcastActivity(null),1800);
+  }
+
+  async function toggleRecording(){
+    if(isRecording){mediaRecorder.current?.stop();return;}
+    if(!activeChat||!user||!navigator.mediaDevices?.getUserMedia){setNotice("Audio recording is not supported on this device.");return;}
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const recorder=new MediaRecorder(stream);
+      audioChunks.current=[];
+      recorder.ondataavailable=event=>{if(event.data.size)audioChunks.current.push(event.data);};
+      recorder.onstop=async()=>{
+        stream.getTracks().forEach(track=>track.stop());
+        setIsRecording(false);broadcastActivity(null);
+        const blob=new Blob(audioChunks.current,{type:recorder.mimeType||"audio/webm"});
+        if(!blob.size)return;
+        const extension=blob.type.includes("mp4")?"m4a":blob.type.includes("ogg")?"ogg":"webm";
+        const path=`${activeChat.id}/${user.id}/voice-${Date.now()}.${extension}`;
+        const {error:uploadError}=await supabase.storage.from("voice-notes").upload(path,blob,{contentType:blob.type,upsert:false});
+        if(uploadError){setNotice(`Voice note failed: ${uploadError.message}`);return;}
+        await sendMessage(`__audio__:${path}`,activeChat,user.id);
+      };
+      mediaRecorder.current=recorder;recorder.start();setIsRecording(true);broadcastActivity("recording");
+    }catch(error){setNotice(`Microphone could not start: ${error instanceof Error?error.message:String(error)}`);}
+  }
+
   async function sendMessage(text=messageText,chat=activeChat,senderId=user?.id) {
     if (!chat||!senderId||!text.trim()) return;
-    const clean=text.trim(); setMessageText("");
+    const clean=text.trim(); setMessageText(""); broadcastActivity(null);
     const expiresAt=chat.disappearing_mode==="24_hours"?new Date(Date.now()+86400000).toISOString():chat.disappearing_mode==="2_days"?new Date(Date.now()+172800000).toISOString():null;
     const { error }=await supabase.from("messages").insert({conversation_id:chat.id,sender_id:senderId,body:clean,reply_to_id:replyingTo?.id||null,expires_at:expiresAt});
     setReplyingTo(null);
@@ -424,24 +486,24 @@ export default function Home() {
     <header><button className="brand" onClick={()=>setView("chats")}><CookieLogo small/><b>Cookie</b></button><div><button aria-label="Notifications">♢{requests.length>0&&<i/>}</button><button className="mini-avatar" onClick={()=>setView("profile")} style={{background:profile?.profile_colour}}>{profile?.avatar_url?<img src={profile.avatar_url} alt="" />:profile?.display_name?.[0]||"C"}</button></div></header>
     <section className="app-screen">
       {view === "chats" && (activeChat?<div className="chat-pane">
-        <div className="chat-head"><button className="chat-back" onClick={()=>{setActiveChat(null);setSelectedMessage(null);void loadConversations(user.id)}}>‹</button><Avatar person={activeChat.person}/><div><b>{activeChat.person.display_name}</b><small>@{activeChat.person.username}</small></div><select aria-label="Automatic message deletion" value={activeChat.disappearing_mode} onChange={event=>changeDisappearingMode(event.target.value as Conversation["disappearing_mode"])}><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select></div>
+        <div className="chat-head"><button className="chat-back" onClick={()=>{setActiveChat(null);setSelectedMessage(null);void loadConversations(user.id)}}>‹</button><Avatar person={activeChat.person}/><div><b>{activeChat.person.display_name}</b><small className={peerActivity?"live-activity":""}>{peerActivity==="recording"?"recording audio…":peerActivity==="typing"?"typing…":`@${activeChat.person.username}`}</small></div><select aria-label="Automatic message deletion" value={activeChat.disappearing_mode} onChange={event=>changeDisappearingMode(event.target.value as Conversation["disappearing_mode"])}><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select></div>
         {pinnedMessageIds.length>0&&<div className="pinned-strip">📌 {pinnedMessageIds.length} pinned message{pinnedMessageIds.length>1?"s":""}</div>}
         <div className="message-stream">{messages.filter(message=>!hiddenMessageIds.includes(message.id)&&(!message.expires_at||new Date(message.expires_at).getTime()>Date.now())).map(message=>{
           const mine=message.sender_id===user.id; const system=message.body.startsWith("__system__:"); const intro=message.body.startsWith("__intro__:");
           if(system)return <div className="system-message" key={message.id}>{message.body.replace("__system__:","")}</div>;
           const grouped=Object.entries((message.reactions||[]).reduce((map,item)=>({...map,[item.emoji]:(map[item.emoji]||0)+1}),{} as Record<string,number>));
           return <div className={`message-row ${mine?"mine":"theirs"}`} key={message.id} onTouchStart={event=>swipeStart.current={x:event.touches[0].clientX,y:event.touches[0].clientY}} onTouchEnd={event=>{if(swipeStart.current&&event.changedTouches[0].clientX-swipeStart.current.x>65)setReplyingTo(message);swipeStart.current=null}}>
-            <button className={`message-bubble ${message.deleted_for_everyone_at?"deleted":""}`} onClick={()=>!message.deleted_for_everyone_at&&setSelectedMessage(selectedMessage?.id===message.id?null:message)}>
+            <div role="button" tabIndex={0} className={`message-bubble ${message.deleted_for_everyone_at?"deleted":""}`} onClick={()=>!message.deleted_for_everyone_at&&setSelectedMessage(selectedMessage?.id===message.id?null:message)} onKeyDown={event=>{if((event.key==="Enter"||event.key===" ")&&!message.deleted_for_everyone_at)setSelectedMessage(selectedMessage?.id===message.id?null:message)}}>
               {message.reply&&<span className="reply-preview"><b>{message.reply.sender_id===user.id?"You":activeChat.person.display_name}</b>{message.reply.body.slice(0,80)}</span>}
-              {message.deleted_for_everyone_at?<em>{(mine?profile?.display_name:activeChat.person.display_name)?.toUpperCase()} DELETED THIS MESSAGE</em>:intro?<span className="intro-message">Friend request message<br/><b>{message.body.split(":").slice(2).join(":")}</b></span>:message.body}
+              {message.deleted_for_everyone_at?<em>{(mine?profile?.display_name:activeChat.person.display_name)?.toUpperCase()} DELETED THIS MESSAGE</em>:intro?<span className="intro-message">Friend request message<br/><b>{message.body.split(":").slice(2).join(":")}</b></span>:message.body.startsWith("__audio__:")?<span className="voice-note"><b>Voice note</b>{message.audio_url?<audio controls preload="metadata" src={message.audio_url}/>:<small>Loading audio…</small>}</span>:message.body}
               {!message.deleted_for_everyone_at&&<small>{message.edited_at&&"Edited · "}{new Date(message.created_at).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} · {mine?<CrumbStatus delivered read={Boolean(activeChat.person_last_read_at&&activeChat.person_last_read_at>message.created_at)}/>:messages.some(later=>later.sender_id===user.id&&later.created_at>message.created_at)?"Delivered":"Received"}</small>}
-            </button>
+            </div>
             {grouped.length>0&&<div className="reaction-counts">{grouped.map(([emoji,count])=><span key={emoji}>{emoji}{count>1&&count}</span>)}</div>}
             {selectedMessage?.id===message.id&&<div className="message-actions"><div className="quick-reactions">{["🍪","❤️","😂","😮","😢","👍"].map(emoji=><button key={emoji} onClick={()=>reactToMessage(message,emoji)}>{emoji}</button>)}<button onClick={()=>{const emoji=window.prompt("Choose an emoji");if(emoji)void reactToMessage(message,emoji)}}>＋</button></div><button onClick={()=>togglePin(message)}>{pinnedMessageIds.includes(message.id)?"Unpin":"Pin"}</button>{mine&&Date.now()-new Date(message.created_at).getTime()<900000&&<button onClick={()=>editMessage(message)}>Edit</button>}<button onClick={()=>deleteMessage(message,false)}>Delete for me</button>{mine&&<button onClick={()=>deleteMessage(message,true)}>Delete for everyone</button>}</div>}
           </div>})}</div>
-        <div className="chat-compose">{replyingTo&&<div className="replying"><span>Replying to <b>{replyingTo.sender_id===user.id?"yourself":activeChat.person.display_name}</b><small>{replyingTo.body.slice(0,90)}</small></span><button onClick={()=>setReplyingTo(null)}>×</button></div>}{emojiPickerOpen&&<div className="emoji-picker"><div className="emoji-tabs">{(Object.keys(emojiGroups) as Array<keyof typeof emojiGroups>).map(category=><button key={category} className={emojiCategory===category?"active":""} onClick={()=>setEmojiCategory(category)}>{category}</button>)}</div><div className="emoji-grid">{emojiGroups[emojiCategory].map((emoji,index)=><button key={`${emoji}-${index}`} onClick={()=>setMessageText(current=>current+emoji)}>{emoji}</button>)}</div></div>}<div className="compose-row"><button className={emojiPickerOpen?"picker-active":""} title="Open emoji picker" aria-label="Open emoji picker" onClick={()=>setEmojiPickerOpen(current=>!current)}>☺</button><button className="attach" title="Photos, files, voice, location, contacts, polls and events">＋</button><input value={messageText} onChange={event=>setMessageText(event.target.value)} onFocus={()=>setEmojiPickerOpen(false)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void sendMessage()}}} placeholder="Message…"/><button className="send" disabled={!messageText.trim()} onClick={()=>sendMessage()}>➤</button></div></div>
-      </div>:<div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="crumb-legend"><CrumbStatus/><span>Sent</span><CrumbStatus delivered/><span>Delivered</span><CrumbStatus read/><span>Read</span></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}{conversations.length>0?<div className="chat-list">{conversations.map(chat=>{const read=Boolean(chat.last_message_at&&chat.person_last_read_at&&chat.person_last_read_at>chat.last_message_at);const hasMessage=Boolean(chat.last_message_at);return <button key={chat.id} onClick={()=>setActiveChat(chat)}><Avatar person={chat.person}/><span><b>{chat.person.display_name}</b><small className={chat.unread_count?"new-chat":""}>{chat.unread_count?(chat.unread_count===1?"New Chat":"New Chats"):hasMessage&&chat.last_sender_id===user.id?<><CrumbStatus delivered read={read}/>{read?"Read":"Delivered"}</>:hasMessage?"Received":"Start chatting 🍪"}</small></span><i>›</i></button>})}</div>:<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/>}</div>)}
-      {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={friends.some(friend=>friend.id===person.id)||sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{friends.some(friend=>friend.id===person.id)?"Friends":sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small>{request.introduction_message&&<em>“{request.introduction_message}”</em>}</div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button onClick={()=>openChat(person)}>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
+        <div className="chat-compose">{replyingTo&&<div className="replying"><span>Replying to <b>{replyingTo.sender_id===user.id?"yourself":activeChat.person.display_name}</b><small>{replyingTo.body.slice(0,90)}</small></span><button onClick={()=>setReplyingTo(null)}>×</button></div>}{emojiPickerOpen&&<div className="emoji-picker"><div className="emoji-tabs">{(Object.keys(emojiGroups) as Array<keyof typeof emojiGroups>).map(category=><button key={category} className={emojiCategory===category?"active":""} onClick={()=>setEmojiCategory(category)}>{category}</button>)}</div><div className="emoji-grid">{emojiGroups[emojiCategory].map((emoji,index)=><button key={`${emoji}-${index}`} onClick={()=>updateMessageText(messageText+emoji)}>{emoji}</button>)}</div></div>}<div className="compose-row"><button className={emojiPickerOpen?"picker-active":""} title="Open emoji picker" aria-label="Open emoji picker" onClick={()=>setEmojiPickerOpen(current=>!current)}>☺</button><button className="attach" title="Photos, files, location, contacts, polls and events">＋</button><input value={messageText} onChange={event=>updateMessageText(event.target.value)} onFocus={()=>setEmojiPickerOpen(false)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();void sendMessage()}}} placeholder={isRecording?"Recording audio…":"Message…"}/><button className={`record ${isRecording?"recording":""}`} aria-label={isRecording?"Stop and send voice note":"Record voice note"} title={isRecording?"Stop and send":"Record voice note"} onClick={()=>void toggleRecording()}>{isRecording?"■":"🎙"}</button><button className="send" disabled={!messageText.trim()} onClick={()=>sendMessage()}>➤</button></div></div>
+      </div>:<div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="crumb-legend"><CrumbStatus/><span>Sent</span><CrumbStatus delivered/><span>Delivered</span><CrumbStatus read/><span>Read</span></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}{conversations.length>0?<div className="chat-list">{conversations.map(chat=>{const read=Boolean(chat.last_message_at&&chat.person_last_read_at&&chat.person_last_read_at>chat.last_message_at);const hasMessage=Boolean(chat.last_message_at);const age=chat.last_message_at?formatAgo(chat.last_message_at,now):"";return <button key={chat.id} onClick={()=>setActiveChat(chat)}><Avatar person={chat.person}/><span><b>{chat.person.display_name}</b><small className={chat.unread_count?"new-chat":""}>{chat.unread_count?(chat.unread_count===1?"New Chat":"New Chats"):hasMessage&&chat.last_sender_id===user.id?<><CrumbStatus delivered read={read}/>{read?"Read":"Delivered"}</>:hasMessage?"Received":"Start chatting 🍪"}{age&&<time>· {age}</time>}</small></span><i>›</i></button>})}</div>:<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/>}</div>)}
+      {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={friends.some(friend=>friend.id===person.id)||sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{friends.some(friend=>friend.id===person.id)?"Friends":sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small>{request.introduction_message&&<em>“{request.introduction_message}”</em>}</div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{!search&&allProfiles.some(person=>!friends.some(friend=>friend.id===person.id))&&<div className="people-list cookie-directory"><h3>People on Cookie</h3>{allProfiles.filter(person=>!friends.some(friend=>friend.id===person.id)).map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button onClick={()=>openChat(person)}>Message</button></div>)}</div>}{!search&&allProfiles.length===0&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="New Cookie accounts will appear here."/>}</div>}
       {view === "crumbs" && <div className="coming"><span>🍪</span><h1>Crumbs</h1><p>Your full-screen For You and Following feeds are coming next.</p></div>}
       {view === "stories" && <div className="coming"><span>✨</span><h1>Stories</h1><p>Nothing here yet. Your friends’ stories will appear here.</p></div>}
       {view === "profile" && <div className="profile-page"><button className="profile-menu-button" aria-label="Profile settings" onClick={()=>{setProfileMenuOpen(current=>!current);setNewUsername(profile?.username||"");}}>•••</button>{profileMenuOpen&&<div className="profile-settings"><h3>Profile settings</h3><div className="photo-actions"><label className="photo-choice"><span>Change profile picture</span><small>Shown beside your name</small><input type="file" accept="image/*" disabled={busy} onChange={event=>uploadProfileImage("avatar",event.target.files?.[0])}/></label><label className="photo-choice"><span>Change cover picture</span><small>Shown behind your profile</small><input type="file" accept="image/*" disabled={busy} onChange={event=>uploadProfileImage("cover",event.target.files?.[0])}/></label></div><label>Change username<div className="username"><span>@</span><input value={newUsername} onChange={event=>setNewUsername(event.target.value)} placeholder="your_username"/></div></label><button className="primary" disabled={busy} onClick={changeUsername}>{busy?"Saving…":"Save username"}</button><button className="danger-button" disabled={busy} onClick={deleteAccount}>Delete account</button></div>}{profile ? <><div className={`profile-hero ${profile.cover_url?"has-cover":""}`} style={profile.cover_url?{backgroundImage:`url("${profile.cover_url}")`}:undefined}><Avatar person={profile}/></div><h1>{profile.display_name}</h1><p>@{profile.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div></> : <div className="coming"><span>🍪</span><h1>Loading your profile…</h1></div>}{notice&&<p className="notice inline">{notice}</p>}<button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
@@ -452,4 +514,5 @@ export default function Home() {
 
 function Avatar({ person }: { person: Profile }) { return <span className="avatar" style={{background:person.profile_colour}}>{person.avatar_url?<img src={person.avatar_url} alt={`${person.display_name} profile`}/>:person.display_name?.[0]?.toUpperCase()||"C"}</span>; }
 function CrumbStatus({ delivered=false, read=false }: { delivered?:boolean; read?:boolean }) { return <span className={`crumb-status ${read?"read":""}`} aria-label={read?"Read":delivered?"Delivered":"Sent"}><i/>{(delivered||read)&&<i/>}</span>; }
+function formatAgo(value:string,now:number){const seconds=Math.max(0,Math.floor((now-new Date(value).getTime())/1000));if(seconds<60)return `${seconds}s`;const minutes=Math.floor(seconds/60);if(minutes<60)return `${minutes}m`;const hours=Math.floor(minutes/60);if(hours<24)return `${hours}h`;const days=Math.floor(hours/24);return `${days}d`;}
 function EmptyState({ title, copy, action, onAction }: { title:string; copy:string; action?:string; onAction?:()=>void }) { return <div className="empty"><span>🍪</span><h2>{title}</h2><p>{copy}</p>{action&&<button onClick={onAction}>{action} →</button>}</div>; }
