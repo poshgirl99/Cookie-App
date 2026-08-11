@@ -154,14 +154,19 @@ export default function Home() {
   const loadMessages = useCallback(async (conversationId: string) => {
     if (!user) return;
     const [{ data: rows, error }, { data: hidden }, { data: pins }] = await Promise.all([
-      supabase.from("messages").select("id,conversation_id,sender_id,body,reply_to_id,created_at,edited_at,deleted_for_everyone_at,expires_at,reactions:message_reactions(emoji,user_id),reply:messages!messages_reply_to_id_fkey(id,body,sender_id)").eq("conversation_id", conversationId).order("created_at"),
+      supabase.from("messages").select("id,conversation_id,sender_id,body,reply_to_id,created_at,edited_at,deleted_for_everyone_at,expires_at,reactions:message_reactions(emoji,user_id)").eq("conversation_id", conversationId).order("created_at"),
       supabase.from("message_hidden_for").select("message_id").eq("user_id", user.id),
       supabase.from("message_pins").select("message_id").eq("conversation_id", conversationId),
     ]);
     if (error) { setNotice(`Messages could not load: ${error.message}`); return; }
+    setNotice(current=>current.startsWith("Messages could not load:")?"":current);
     setHiddenMessageIds((hidden ?? []).map(item=>item.message_id));
     setPinnedMessageIds((pins ?? []).map(item=>item.message_id));
-    setMessages((rows ?? []).map((item: Record<string, unknown>)=>({ ...item, reply:Array.isArray(item.reply)?item.reply[0]:item.reply })) as ChatMessage[]);
+    const rawRows=(rows ?? []) as Array<Record<string, unknown>>;
+    setMessages(rawRows.map(item=>{
+      const repliedTo=item.reply_to_id ? rawRows.find(candidate=>candidate.id===item.reply_to_id) : null;
+      return { ...item, reply:repliedTo ? { id:String(repliedTo.id), body:String(repliedTo.body||""), sender_id:String(repliedTo.sender_id) } : null } as ChatMessage;
+    }));
     await supabase.from("conversation_members").update({ last_read_at:new Date().toISOString() }).eq("conversation_id",conversationId).eq("user_id",user.id);
   }, [supabase,user]);
 
