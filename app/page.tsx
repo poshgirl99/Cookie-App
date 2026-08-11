@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase";
 
-type Profile = { id: string; username: string; display_name: string; profile_colour: string };
+type Profile = { id: string; username: string; display_name: string; profile_colour: string; avatar_url: string | null; cover_url: string | null };
 type FriendRequest = { id: string; requester_id: string; recipient_id: string; status: string; requester?: Profile };
 type AuthMode = "signin" | "signup";
 type AppView = "chats" | "friends" | "crumbs" | "stories" | "profile";
@@ -52,7 +52,7 @@ export default function Home() {
   const loadAccount = useCallback(async (account: User | null) => {
     setUser(account);
     if (!account) { setProfile(null); setRequests([]); setFriends([]); setSentRequestIds([]); return; }
-    const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour").eq("id", account.id).maybeSingle();
+    const { data } = await supabase.from("profiles").select("id,username,display_name,profile_colour,avatar_url,cover_url").eq("id", account.id).maybeSingle();
     let currentProfile = data as Profile | null;
     if (!currentProfile) {
       const emailName = account.email?.split("@")[0] || "cookie";
@@ -62,15 +62,17 @@ export default function Home() {
         username: `${base}_${account.id.slice(0, 6)}`,
         display_name: String(account.user_metadata?.display_name || emailName),
         profile_colour: colours[0],
+        avatar_url: null,
+        cover_url: null,
       };
-      const { data: created } = await supabase.from("profiles").upsert(fallback).select("id,username,display_name,profile_colour").single();
+      const { data: created } = await supabase.from("profiles").upsert(fallback).select("id,username,display_name,profile_colour,avatar_url,cover_url").single();
       currentProfile = (created as Profile | null) ?? fallback;
     }
     setProfile(currentProfile);
 
     const { data: incoming } = await supabase
       .from("friend_requests")
-      .select("id,requester_id,recipient_id,status,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour)")
+      .select("id,requester_id,recipient_id,status,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)")
       .eq("recipient_id", account.id).eq("status", "pending");
     setRequests((incoming ?? []).map((item: Record<string, unknown>) => ({ ...item, requester: Array.isArray(item.requester) ? item.requester[0] : item.requester })) as FriendRequest[]);
 
@@ -82,7 +84,7 @@ export default function Home() {
 
     const { data: accepted } = await supabase
       .from("friend_requests")
-      .select("requester_id,recipient_id,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour),recipient:profiles!friend_requests_recipient_id_fkey(id,username,display_name,profile_colour)")
+      .select("requester_id,recipient_id,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url),recipient:profiles!friend_requests_recipient_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)")
       .eq("status", "accepted").or(`requester_id.eq.${account.id},recipient_id.eq.${account.id}`);
     const list = (accepted ?? []).map((row: Record<string, unknown>) => {
       const value = row.requester_id === account.id ? row.recipient : row.requester;
@@ -170,6 +172,25 @@ export default function Home() {
     setNotice(`Your username is now @${clean}. 🍪`);
   }
 
+  async function uploadProfileImage(kind: "avatar" | "cover", file?: File) {
+    if (!file || !user || !profile) return;
+    if (!file.type.startsWith("image/")) { setNotice("Please choose an image file."); return; }
+    if (file.size > 8 * 1024 * 1024) { setNotice("Please choose an image smaller than 8 MB."); return; }
+    setBusy(true); setNotice("");
+    const extension = (file.name.split(".").pop() || file.type.split("/")[1] || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const path = `${user.id}/${kind}-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("profile-media").upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: false });
+    if (uploadError) { setBusy(false); setNotice(`Image upload failed: ${uploadError.message}`); return; }
+    const { data: publicFile } = supabase.storage.from("profile-media").getPublicUrl(path);
+    const field = kind === "avatar" ? "avatar_url" : "cover_url";
+    const { error: profileError } = await supabase.from("profiles").update({ [field]: publicFile.publicUrl }).eq("id", user.id);
+    setBusy(false);
+    if (profileError) { setNotice(`Profile update failed: ${profileError.message}`); return; }
+    setProfile({ ...profile, [field]: publicFile.publicUrl });
+    setProfileMenuOpen(false);
+    setNotice(kind === "avatar" ? "Profile picture updated! 🍪" : "Cover picture updated! 🍪");
+  }
+
   async function deleteAccount() {
     if (!window.confirm("Permanently delete your Cookie account? This cannot be undone.")) return;
     setBusy(true); setNotice("");
@@ -185,7 +206,7 @@ export default function Home() {
     const sequence = ++searchSequence.current;
     const term = value.trim().toLowerCase().replace(/^@/, "");
     if (!term || !user) { setResults([]); setNotice(""); return; }
-    const { data, error } = await supabase.from("profiles").select("id,username,display_name,profile_colour").limit(100);
+    const { data, error } = await supabase.from("profiles").select("id,username,display_name,profile_colour,avatar_url,cover_url").limit(100);
     if (sequence !== searchSequence.current) return;
     if (error) { setResults([]); setNotice(`Search failed: ${error.message}`); return; }
     const matches = (data ?? []).filter(person => person.id !== user.id && (
@@ -245,17 +266,17 @@ export default function Home() {
   </main>;
 
   return <main className="app-shell"><div className="app-frame">
-    <header><button className="brand" onClick={()=>setView("chats")}><CookieLogo small/><b>Cookie</b></button><div><button aria-label="Notifications">♢{requests.length>0&&<i/>}</button><button className="mini-avatar" onClick={()=>setView("profile")} style={{background:profile?.profile_colour}}>{profile?.display_name?.[0]||"C"}</button></div></header>
+    <header><button className="brand" onClick={()=>setView("chats")}><CookieLogo small/><b>Cookie</b></button><div><button aria-label="Notifications">♢{requests.length>0&&<i/>}</button><button className="mini-avatar" onClick={()=>setView("profile")} style={{background:profile?.profile_colour}}>{profile?.avatar_url?<img src={profile.avatar_url} alt="" />:profile?.display_name?.[0]||"C"}</button></div></header>
     <section className="app-screen">
       {view === "chats" && <div className="page"><div className="title-row"><div><p className="kicker">Welcome, {profile?.display_name.split(" ")[0]}</p><h1>Your chats</h1></div><button className="round" onClick={()=>setView("friends")}>＋</button></div><div className="search-box">⌕ <input placeholder="Search messages, people and files"/></div><div className="folder-row"><button className="active">All</button><button>Friends</button><button>Family</button><button>School</button><button>Groups</button></div>{requests.length>0&&<button className="request-banner" onClick={()=>setView("friends")}><span>✉</span><div><b>Friend requests</b><small>{requests.length} waiting for you</small></div><strong>{requests.length}</strong><i>›</i></button>}<EmptyState title="No conversations yet" copy="Add friends to start chatting. Your real conversations will appear here." action="Find friends" onAction={()=>setView("friends")}/></div>}
       {view === "friends" && <div className="page"><div className="title-row"><div><p className="kicker">Grow your circle</p><h1>Find friends</h1></div></div><div className="search-box">@ <input value={search} onChange={e=>searchPeople(e.target.value)} placeholder="Search a unique username" autoFocus/></div>{notice&&<p className="notice inline">{notice}</p>}{results.length>0&&<div className="people-list"><h3>People</h3>{results.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button disabled={friends.some(friend=>friend.id===person.id)||sentRequestIds.includes(person.id)} onClick={()=>addFriend(person)}>{friends.some(friend=>friend.id===person.id)?"Friends":sentRequestIds.includes(person.id)?"Added":"Add friend"}</button></div>)}</div>}{requests.length>0&&<div className="people-list"><h3>Requests</h3>{requests.map(request=><div className="person request" key={request.id}>{request.requester&&<Avatar person={request.requester}/>}<div><b>{request.requester?.display_name}</b><small>@{request.requester?.username}</small></div><button onClick={()=>answerRequest(request,"accepted")}>Accept</button><button className="quiet" onClick={()=>answerRequest(request,"declined")}>Decline</button></div>)}</div>}{friends.length>0&&<div className="people-list"><h3>Your friends</h3>{friends.map(person=><div className="person" key={person.id}><Avatar person={person}/><div><b>{person.display_name}</b><small>@{person.username}</small></div><button>Message</button></div>)}</div>}{!search&&requests.length===0&&friends.length===0&&<EmptyState title="Your circle starts here" copy="Search for someone by their unique Cookie username."/>}</div>}
       {view === "crumbs" && <div className="coming"><span>🍪</span><h1>Crumbs</h1><p>Your full-screen For You and Following feeds are coming next.</p></div>}
       {view === "stories" && <div className="coming"><span>✨</span><h1>Stories</h1><p>Nothing here yet. Your friends’ stories will appear here.</p></div>}
-      {view === "profile" && <div className="profile-page"><button className="profile-menu-button" aria-label="Profile settings" onClick={()=>{setProfileMenuOpen(current=>!current);setNewUsername(profile?.username||"");}}>•••</button>{profileMenuOpen&&<div className="profile-settings"><h3>Profile settings</h3><label>Change username<div className="username"><span>@</span><input value={newUsername} onChange={event=>setNewUsername(event.target.value)} placeholder="your_username"/></div></label><button className="primary" disabled={busy} onClick={changeUsername}>{busy?"Saving…":"Save username"}</button><button className="danger-button" disabled={busy} onClick={deleteAccount}>Delete account</button></div>}{profile ? <><div className="profile-hero"><CookieLogo/><Avatar person={profile}/></div><h1>{profile.display_name}</h1><p>@{profile.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div></> : <div className="coming"><span>🍪</span><h1>Loading your profile…</h1></div>}{notice&&<p className="notice inline">{notice}</p>}<button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
+      {view === "profile" && <div className="profile-page"><button className="profile-menu-button" aria-label="Profile settings" onClick={()=>{setProfileMenuOpen(current=>!current);setNewUsername(profile?.username||"");}}>•••</button>{profileMenuOpen&&<div className="profile-settings"><h3>Profile settings</h3><div className="photo-actions"><label className="photo-choice"><span>Change profile picture</span><small>Shown beside your name</small><input type="file" accept="image/*" disabled={busy} onChange={event=>uploadProfileImage("avatar",event.target.files?.[0])}/></label><label className="photo-choice"><span>Change cover picture</span><small>Shown behind your profile</small><input type="file" accept="image/*" disabled={busy} onChange={event=>uploadProfileImage("cover",event.target.files?.[0])}/></label></div><label>Change username<div className="username"><span>@</span><input value={newUsername} onChange={event=>setNewUsername(event.target.value)} placeholder="your_username"/></div></label><button className="primary" disabled={busy} onClick={changeUsername}>{busy?"Saving…":"Save username"}</button><button className="danger-button" disabled={busy} onClick={deleteAccount}>Delete account</button></div>}{profile ? <><div className={`profile-hero ${profile.cover_url?"has-cover":""}`} style={profile.cover_url?{backgroundImage:`url("${profile.cover_url}")`}:undefined}><Avatar person={profile}/></div><h1>{profile.display_name}</h1><p>@{profile.username}</p><div className="stats"><div><b>{friends.length}</b><small>Friends</small></div><div><b>0</b><small>Followers</small></div><div><b>0</b><small>Following</small></div></div></> : <div className="coming"><span>🍪</span><h1>Loading your profile…</h1></div>}{notice&&<p className="notice inline">{notice}</p>}<button className="outline" onClick={()=>supabase.auth.signOut()}>Sign out</button></div>}
     </section>
     <nav>{([{id:"chats",icon:"◒",label:"Chats"},{id:"friends",icon:"＋",label:"Friends"},{id:"crumbs",icon:"●",label:"Crumbs"},{id:"stories",icon:"◉",label:"Stories"},{id:"profile",icon:"○",label:"Profile"}] as const).map(item=><button key={item.id} className={view===item.id?"active":""} onClick={()=>setView(item.id)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
   </div></main>;
 }
 
-function Avatar({ person }: { person: Profile }) { return <span className="avatar" style={{background:person.profile_colour}}>{person.display_name?.[0]?.toUpperCase()||"C"}</span>; }
+function Avatar({ person }: { person: Profile }) { return <span className="avatar" style={{background:person.profile_colour}}>{person.avatar_url?<img src={person.avatar_url} alt={`${person.display_name} profile`}/>:person.display_name?.[0]?.toUpperCase()||"C"}</span>; }
 function EmptyState({ title, copy, action, onAction }: { title:string; copy:string; action?:string; onAction?:()=>void }) { return <div className="empty"><span>🍪</span><h2>{title}</h2><p>{copy}</p>{action&&<button onClick={onAction}>{action} →</button>}</div>; }
