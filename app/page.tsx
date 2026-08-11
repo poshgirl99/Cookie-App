@@ -11,6 +11,7 @@ type AppView = "chats" | "friends" | "crumbs" | "stories" | "profile";
 
 const interests = ["Music", "Comedy", "Fashion", "Food", "Gaming", "Sports", "Art", "Travel", "Books", "Dance", "Tech", "Faith"];
 const colours = ["#e76f51", "#8b5cf6", "#2a9d8f", "#e9a23b", "#e84a8a", "#457b9d"];
+const publicAppUrl = "https://cookie-app-nicholasdeheer-8842s-projects.vercel.app";
 const flavours = [
   ["🍫", "Choc Chip", "Warm & easy-going"],
   ["🌈", "Funfetti", "Loud & playful"],
@@ -110,7 +111,7 @@ export default function Home() {
 
   async function googleSignIn() {
     setNotice("");
-    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: publicAppUrl } });
     if (error) setNotice(error.message);
   }
 
@@ -120,7 +121,7 @@ export default function Home() {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: publicAppUrl },
     });
     setBusy(false);
     setNotice(error ? error.message : "Confirmation email resent. Check your inbox and spam folder. 🍪");
