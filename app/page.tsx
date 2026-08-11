@@ -119,10 +119,12 @@ export default function Home() {
     const sequence = ++searchSequence.current;
     const term = value.trim().toLowerCase().replace(/^@/, "");
     if (!term || !user) { setResults([]); setNotice(""); return; }
-    const { data, error } = await supabase.from("profiles").select("id,username,display_name,profile_colour").ilike("username", `${term}%`).limit(20);
+    const { data, error } = await supabase.from("profiles").select("id,username,display_name,profile_colour").limit(100);
     if (sequence !== searchSequence.current) return;
     if (error) { setResults([]); setNotice(`Search failed: ${error.message}`); return; }
-    const matches = (data ?? []).filter(person => person.id !== user.id);
+    const matches = (data ?? []).filter(person => person.id !== user.id && (
+      person.username.toLowerCase().includes(term) || person.display_name.toLowerCase().includes(term)
+    )).slice(0, 20);
     setResults(matches);
     setNotice(matches.length ? "" : `No Cookie user found for @${term}.`);
   }
