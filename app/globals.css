@@ -588,6 +588,146 @@ button:disabled {
   font-style: normal;
   box-shadow: 0 2px 8px #3a241c24;
 }
+.stories-page {
+  min-height: 100%;
+  padding: 32px clamp(18px, 5vw, 64px) 90px;
+}
+.stories-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.stories-head h1 {
+  margin: 4px 0 20px;
+  font-size: 42px;
+}
+.story-add {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-weight: 800;
+}
+.story-add > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cocoa);
+  color: white;
+  font-size: 27px;
+}
+.story-add input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.story-caption-input {
+  width: 100%;
+  max-width: 620px;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff8e9;
+}
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+.story-grid > button {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border: 3px solid #ef8f43;
+  border-radius: 24px;
+  background: #4a3026;
+  padding: 0;
+}
+.story-grid img,
+.story-grid video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.story-grid > button > span {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: white;
+  text-align: left;
+  text-shadow: 0 2px 7px #000;
+}
+.story-grid .avatar,
+.story-viewer-head .avatar {
+  width: 37px;
+  height: 37px;
+  border: 2px solid white;
+}
+.story-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #1c110feb;
+  color: white;
+  animation: cardIn 180ms ease-out;
+}
+.story-viewer > img,
+.story-viewer > video {
+  width: min(430px, 100vw);
+  height: min(78dvh, 760px);
+  object-fit: contain;
+  background: #080504;
+}
+.story-viewer > p {
+  position: absolute;
+  bottom: 6%;
+  max-width: min(390px, 82vw);
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 13px;
+  background: #1f1410b8;
+  text-align: center;
+}
+.story-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #ffffff20;
+  color: white;
+  font-size: 30px;
+}
+.story-viewer-head {
+  position: absolute;
+  top: 20px;
+  left: max(20px, calc(50% - 210px));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.story-viewer-head span {
+  display: grid;
+}
+.story-viewer-head small {
+  color: #f4dfd2;
+}
 .best-friends-strip small {
   width: 100%;
   overflow: hidden;
@@ -963,6 +1103,19 @@ button:disabled {
   }
   .desktop-chat-stage {
     display: none;
+  }
+  .stories-page {
+    padding: 24px 16px 80px;
+  }
+  .stories-head h1 {
+    font-size: 34px;
+  }
+  .story-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .story-viewer-head {
+    left: 16px;
   }
   .auth-shell {
     display: block;
