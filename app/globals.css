@@ -1799,7 +1799,7 @@ button:disabled {
 }
 .message-hover-tools {
   position: absolute;
-  top: 50%;
+  top: -17px;
   z-index: 7;
   display: flex;
   gap: 3px;
@@ -1810,13 +1810,14 @@ button:disabled {
   box-shadow: 0 9px 28px #42251b22;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%) scale(.94);
+  transform: translateY(4px) scale(.94);
   transition: opacity 120ms ease, transform 120ms ease;
 }
-.message-row.mine .message-hover-tools { right: calc(100% + 8px); }
-.message-row.theirs .message-hover-tools { left: calc(100% + 8px); }
+.message-row.mine .message-hover-tools { right: 8px; }
+.message-row.theirs .message-hover-tools { left: 8px; }
 .message-row:hover .message-hover-tools,
-.message-row:focus-within .message-hover-tools { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
+.message-row:focus-within .message-hover-tools,
+.message-row.tools-open .message-hover-tools { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
 .message-hover-tools button,
 .message-hover-popover button {
   border: 0;
@@ -1833,7 +1834,7 @@ button:disabled {
 .message-hover-popover button:hover { background: #f5ead8; }
 .message-hover-popover {
   position: absolute;
-  top: calc(50% + 27px);
+  top: 22px;
   z-index: 9;
   display: flex;
   gap: 3px;
@@ -1844,8 +1845,8 @@ button:disabled {
   box-shadow: 0 12px 35px #42251b2b;
   animation: cardIn 120ms ease-out;
 }
-.message-row.mine .message-hover-popover { right: calc(100% + 8px); }
-.message-row.theirs .message-hover-popover { left: calc(100% + 8px); }
+.message-row.mine .message-hover-popover { right: 8px; }
+.message-row.theirs .message-hover-popover { left: 8px; }
 .reaction-popover button { font-size: 19px; }
 .delete-popover { width: max-content; flex-direction: column; align-items: stretch; }
 .delete-popover button { height: auto; text-align: left; font-size: 11px; }
