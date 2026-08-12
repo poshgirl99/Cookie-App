@@ -450,6 +450,7 @@ export default function Home() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const crumbActionLocks = useRef(new Set<string>());
 
   const loadCrumbs = useCallback(
     async (accountId: string, feed: "for_you" | "following" = crumbFeed) => {
@@ -924,16 +925,25 @@ export default function Home() {
     active: boolean,
   ) {
     if (!user) return;
+    const lockKey = `${table}:${post.id}:${user.id}`;
+    if (crumbActionLocks.current.has(lockKey)) return;
+    crumbActionLocks.current.add(lockKey);
     const request = active
       ? supabase
           .from(table)
           .delete()
           .eq("post_id", post.id)
           .eq("user_id", user.id)
-      : supabase.from(table).insert({ post_id: post.id, user_id: user.id });
+      : supabase
+          .from(table)
+          .upsert(
+            { post_id: post.id, user_id: user.id },
+            { onConflict: "post_id,user_id", ignoreDuplicates: true },
+          );
     const { error } = await request;
+    crumbActionLocks.current.delete(lockKey);
     if (error) {
-      setNotice(error.message);
+      setNotice("That action couldn’t update. Please try once more.");
       return;
     }
     await loadCrumbs(user.id, crumbFeed);
