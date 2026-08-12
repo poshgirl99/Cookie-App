@@ -397,6 +397,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
   const [results, setResults] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
@@ -842,7 +843,7 @@ export default function Home() {
     setBusy(false);
     if (error) {
       await supabase.storage.from("story-media").remove([mediaPath]);
-      setNotice(error.message);
+      setNotice("Your Story could not be posted. Please try again.");
       return;
     }
     setStoryCaption("");
@@ -1337,6 +1338,27 @@ export default function Home() {
     setNotice(`Your username is now @${clean}. 🍪`);
   }
 
+  async function changeDisplayName() {
+    if (!user || !profile) return;
+    const clean = newDisplayName.trim().replace(/\s+/g, " ");
+    if (clean.length < 2 || clean.length > 40) {
+      setNotice("Your name should contain between 2 and 40 characters.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ display_name: clean })
+      .eq("id", user.id);
+    setBusy(false);
+    if (error) {
+      setNotice("Your name could not be changed. Please try again.");
+      return;
+    }
+    setProfile({ ...profile, display_name: clean });
+    setNotice(`Your name is now ${clean}. 🍪`);
+  }
+
   async function uploadProfileImage(kind: "avatar" | "cover", file?: File) {
     if (!file || !user || !profile) return;
     if (!file.type.startsWith("image/")) {
@@ -1486,7 +1508,7 @@ export default function Home() {
       .update({ status, responded_at: new Date().toISOString() })
       .eq("id", request.id);
     if (error) {
-      setNotice(error.message);
+      setNotice("That friend request could not be updated. Please try again.");
       return;
     }
     setRequests((current) => current.filter((item) => item.id !== request.id));
@@ -1695,7 +1717,7 @@ export default function Home() {
           .eq("emoji", emoji)
       : await query.insert({ message_id: message.id, user_id: user.id, emoji });
     if (error) {
-      setNotice(error.message);
+      setNotice("That reaction could not be added. Please try again.");
       if (activeChat) await loadMessages(activeChat.id);
     }
     setMessageReactionMenuId(null);
@@ -1770,7 +1792,7 @@ export default function Home() {
           ? [...current.filter((id) => id !== message.id), message.id]
           : current.filter((id) => id !== message.id),
       );
-      setNotice(error.message);
+      setNotice("That message could not be saved. Please try again.");
     } else {
       setNotice(pinned ? "Message removed from saved chat." : "Message saved in chat.");
     }
@@ -2349,11 +2371,9 @@ export default function Home() {
                             )}
                             {message.deleted_for_everyone_at ? (
                               <em>
-                                {(mine
-                                  ? profile?.display_name
-                                  : activeChat.person.display_name
-                                )?.toUpperCase()}{" "}
-                                DELETED THIS MESSAGE
+                                {mine
+                                  ? "YOU DELETED THIS MESSAGE"
+                                  : `${activeChat.person.display_name} deleted this message`}
                               </em>
                             ) : intro ? (
                               <span className="intro-message">
@@ -2379,6 +2399,12 @@ export default function Home() {
                             ) : (
                               message.body
                             )}
+                            {pinnedMessageIds.includes(message.id) &&
+                              !message.deleted_for_everyone_at && (
+                                <strong className="saved-in-chat-label">
+                                  ★ SAVED IN CHAT
+                                </strong>
+                              )}
                             {!message.deleted_for_everyone_at && (
                               <small>
                                 {message.edited_at && "Edited · "}
@@ -3418,6 +3444,7 @@ export default function Home() {
                 onClick={() => {
                   setProfileMenuOpen((current) => !current);
                   setNewUsername(profile?.username || "");
+                  setNewDisplayName(profile?.display_name || "");
                 }}
               >
                 •••
@@ -3456,6 +3483,22 @@ export default function Home() {
                       />
                     </label>
                   </div>
+                  <label>
+                    Change your name
+                    <input
+                      value={newDisplayName}
+                      onChange={(event) => setNewDisplayName(event.target.value)}
+                      placeholder="Your name"
+                      maxLength={40}
+                    />
+                  </label>
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={changeDisplayName}
+                  >
+                    {busy ? "Saving…" : "Save name"}
+                  </button>
                   <label>
                     Change username
                     <div className="username">
