@@ -1460,6 +1460,9 @@ button:disabled {
   font-weight: 800;
 }
 .friend-profile-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
   padding: 22px 24px 25px;
 }
 .friend-profile-actions button {
@@ -1474,6 +1477,12 @@ button:disabled {
 .friend-profile-actions button:disabled {
   background: #decdb9;
   color: #7b665b;
+}
+.friend-profile-actions .unadd-friend-button {
+  width: auto;
+  border: 1px solid #e7b8a8;
+  background: #fff1e8;
+  color: #9a382c;
 }
 .avatar {
   width: 48px;
