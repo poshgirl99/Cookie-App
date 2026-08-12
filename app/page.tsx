@@ -2945,7 +2945,7 @@ export default function Home() {
                                         <span className="avatar">C</span>
                                       )}
                                       <span>
-                                        <b>{commenter ? `@${commenter.username}` : "Cookie user"}</b>
+                                        <b>{commenter ? commenter.display_name : "Cookie user"}</b>
                                         <p>{comment.body}</p>
                                         <small>{formatAgo(comment.created_at, now)} ago</small>
                                       </span>
