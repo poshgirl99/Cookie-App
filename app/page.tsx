@@ -2381,7 +2381,7 @@ export default function Home() {
                     <p className="kicker">
                       Welcome, {profile?.display_name.split(" ")[0]}
                     </p>
-                    <h1>Your chats</h1>
+                    <h1>Chat Jar</h1>
                   </div>
                   <button className="round" onClick={() => setView("friends")}>
                     ＋
@@ -2542,7 +2542,7 @@ export default function Home() {
                               </small>
                             )}
                           </span>
-                          <i>›</i>
+                          <i className="chat-open-label">Open</i>
                         </button>
                       );
                     })}
