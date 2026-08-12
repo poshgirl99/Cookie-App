@@ -2201,7 +2201,7 @@ export default function Home() {
                       );
                       return (
                         <div
-                          className={`message-row ${mine ? "mine" : "theirs"}`}
+                          className={`message-row ${mine ? "mine" : "theirs"} ${selectedMessage?.id === message.id ? "tools-open" : ""}`}
                           key={message.id}
                           onTouchStart={(event) =>
                             (swipeStart.current = {
@@ -2223,6 +2223,7 @@ export default function Home() {
                           {!message.deleted_for_everyone_at && (
                             <div className="message-hover-tools" aria-label="Message tools">
                               <button
+                                type="button"
                                 title={pinnedMessageIds.includes(message.id) ? "Remove from saved messages" : "Save in chat"}
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -2232,6 +2233,7 @@ export default function Home() {
                                 {pinnedMessageIds.includes(message.id) ? "★" : "☆"}
                               </button>
                               <button
+                                type="button"
                                 title="Copy message"
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -2242,6 +2244,7 @@ export default function Home() {
                                 ⧉
                               </button>
                               <button
+                                type="button"
                                 title="React"
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -2252,6 +2255,7 @@ export default function Home() {
                                 ☺
                               </button>
                               <button
+                                type="button"
                                 title="Delete"
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -2266,14 +2270,14 @@ export default function Home() {
                           {messageReactionMenuId === message.id && (
                             <div className="message-hover-popover reaction-popover">
                               {["😂", "😭", "♥️", "❓️", "🔥", "🤯"].map((emoji) => (
-                                <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>
+                                <button type="button" key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>
                               ))}
                             </div>
                           )}
                           {messageDeleteMenuId === message.id && (
                             <div className="message-hover-popover delete-popover">
-                              <button onClick={() => void deleteMessage(message, false)}>Delete for me</button>
-                              {mine && <button onClick={() => void deleteMessage(message, true)}>Delete for everyone</button>}
+                              <button type="button" onClick={() => void deleteMessage(message, false)}>Delete for me</button>
+                              {mine && <button type="button" onClick={() => void deleteMessage(message, true)}>Delete for everyone</button>}
                             </div>
                           )}
                           <div
