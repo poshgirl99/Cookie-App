@@ -453,7 +453,11 @@ button:disabled {
 }
 .app-screen {
   overflow: auto;
+  min-height: 0;
   background: #fffdf8;
+}
+.app-screen:has(.chat-pane) {
+  overflow: hidden;
 }
 .page {
   max-width: 840px;
@@ -1639,6 +1643,7 @@ button:disabled {
 }
 .chat-pane {
   height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   background: linear-gradient(#fffdf8, #fff8ea);
@@ -1685,6 +1690,7 @@ button:disabled {
   font-size: 12px;
 }
 .message-stream {
+  min-height: 0;
   overflow: auto;
   padding: 22px max(18px, calc((100% - 760px) / 2));
   display: flex;
