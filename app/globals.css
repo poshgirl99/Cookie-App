@@ -1743,6 +1743,15 @@ button:disabled {
   font-style: italic;
   letter-spacing: 0.4px;
 }
+.saved-in-chat-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: .45px;
+  color: #d77a2f;
+}
+.mine .saved-in-chat-label { color: #ffd08b; }
 .reply-preview {
   display: grid;
   border-left: 3px solid #ef9b54;
