@@ -130,6 +130,9 @@ const flavours = [
   ["🍯", "Caramel", "Sweet & thoughtful"],
   ["🌶️", "Ginger Snap", "Bold & spontaneous"],
 ];
+const energyMeaning = (energy?: string | null) =>
+  flavours.find(([, title]) => title === energy)?.[2] ||
+  "A fresh, friendly presence on Cookie";
 const emojiGroups = {
   "😊": [
     "😀",
@@ -406,7 +409,9 @@ export default function Home() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
-  const [profileEditField, setProfileEditField] = useState<"name" | "username" | null>(null);
+  const [newProfileFlavour, setNewProfileFlavour] = useState("");
+  const [newProfileInterests, setNewProfileInterests] = useState<string[]>([]);
+  const [profileEditField, setProfileEditField] = useState<"name" | "username" | "energy" | "interests" | null>(null);
   const [results, setResults] = useState<Profile[]>([]);
   const [previewProfile, setPreviewProfile] = useState<Profile | null>(null);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
@@ -1380,6 +1385,45 @@ export default function Home() {
     setProfile({ ...profile, display_name: clean });
     setProfileEditField(null);
     setNotice(`Your name is now ${clean}. 🍪`);
+  }
+
+  async function changeProfileEnergy() {
+    if (!user || !profile || !newProfileFlavour) return;
+    setBusy(true);
+    setNotice("");
+    const { error } = await supabase
+      .from("profiles")
+      .update({ flavour: newProfileFlavour })
+      .eq("id", user.id);
+    setBusy(false);
+    if (error) {
+      setNotice("Your Cookie Energy could not be changed. Please try again.");
+      return;
+    }
+    setProfile({ ...profile, flavour: newProfileFlavour });
+    setProfileEditField(null);
+    setNotice(`Your Cookie Energy is now ${newProfileFlavour}. ✨`);
+  }
+
+  async function changeProfileInterests() {
+    if (!user || !profile || !newProfileInterests.length) {
+      setNotice("Choose at least one interest.");
+      return;
+    }
+    setBusy(true);
+    setNotice("");
+    const { error } = await supabase
+      .from("profiles")
+      .update({ interests: newProfileInterests })
+      .eq("id", user.id);
+    setBusy(false);
+    if (error) {
+      setNotice("Your interests could not be changed. Please try again.");
+      return;
+    }
+    setProfile({ ...profile, interests: newProfileInterests });
+    setProfileEditField(null);
+    setNotice("Your interests have been updated. 🍪");
   }
 
   async function uploadProfileImage(kind: "avatar" | "cover", file?: File) {
@@ -3652,6 +3696,36 @@ export default function Home() {
                       <div><button type="button" onClick={() => setProfileEditField(null)}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={changeUsername}>{busy ? "Saving…" : "Save"}</button></div>
                     </div>
                   )}
+                  <div className="profile-identity-setting">
+                    <div><small>Cookie Energy</small><b>{profile?.flavour || "Freshly baked"}</b><span>{energyMeaning(profile?.flavour)}</span></div>
+                    <button type="button" onClick={() => { setNewProfileFlavour(profile?.flavour || "Choc Chip"); setProfileEditField("energy"); }}>Edit</button>
+                  </div>
+                  {profileEditField === "energy" && (
+                    <div className="profile-inline-editor profile-choice-editor">
+                      <div className="energy-edit-grid">
+                        {flavours.map(([emoji, title, copy]) => (
+                          <button type="button" key={title} className={newProfileFlavour === title ? "selected" : ""} onClick={() => setNewProfileFlavour(title)}>
+                            <span>{emoji}</span><b>{title}</b><small>{copy}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <div><button type="button" onClick={() => setProfileEditField(null)}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={changeProfileEnergy}>{busy ? "Saving…" : "Save energy"}</button></div>
+                    </div>
+                  )}
+                  <div className="profile-identity-setting">
+                    <div><small>Interests</small><b>{profile?.interests?.length ? profile.interests.join(", ") : "Choose your interests"}</b></div>
+                    <button type="button" onClick={() => { setNewProfileInterests(profile?.interests || []); setProfileEditField("interests"); }}>Edit</button>
+                  </div>
+                  {profileEditField === "interests" && (
+                    <div className="profile-inline-editor profile-choice-editor">
+                      <div className="profile-interest-editor">
+                        {interests.map((item) => (
+                          <button type="button" key={item} className={newProfileInterests.includes(item) ? "selected" : ""} onClick={() => setNewProfileInterests((current) => current.includes(item) ? current.filter((interest) => interest !== item) : [...current, item])}>{item}</button>
+                        ))}
+                      </div>
+                      <div><button type="button" onClick={() => setProfileEditField(null)}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={changeProfileInterests}>{busy ? "Saving…" : "Save interests"}</button></div>
+                    </div>
+                  )}
                   <button
                     className="danger-button"
                     disabled={busy}
@@ -3721,7 +3795,7 @@ export default function Home() {
               </div>
               <div className="friend-energy-card">
                 <span>✨</span>
-                <div><small>COOKIE ENERGY</small><b>{previewProfile.flavour || "Freshly baked"}</b></div>
+                <div><small>COOKIE ENERGY</small><b>{previewProfile.flavour || "Freshly baked"}</b><p>{energyMeaning(previewProfile.flavour)}</p></div>
               </div>
               {previewProfile.bio && <p className="friend-profile-bio">{previewProfile.bio}</p>}
               {previewProfile.interests && previewProfile.interests.length > 0 && (
