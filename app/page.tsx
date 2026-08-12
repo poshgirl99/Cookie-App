@@ -406,6 +406,7 @@ export default function Home() {
   const [bestFriends, setBestFriends] = useState<BestFriendRanking[]>([]);
   const [stories, setStories] = useState<StoryPost[]>([]);
   const [activeStory, setActiveStory] = useState<StoryPost | null>(null);
+  const [storyReply, setStoryReply] = useState("");
   const [storyCaption, setStoryCaption] = useState("");
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1477,6 +1478,20 @@ export default function Home() {
     setActiveChat(chat);
     setView("chats");
     return chat;
+  }
+
+  async function replyToStory() {
+    if (!activeStory || !user || !storyReply.trim()) return;
+    if (activeStory.author_id === user.id) {
+      setNotice("You can’t reply to your own Story.");
+      return;
+    }
+    const reply = storyReply.trim();
+    setStoryReply("");
+    const chat = await openChat(activeStory.author);
+    if (!chat) return;
+    await sendMessage(`Replied to your Story: ${reply}`, chat, user.id);
+    setActiveStory(null);
   }
 
   function broadcastActivity(state: "typing" | "recording" | null) {
@@ -3178,7 +3193,11 @@ export default function Home() {
         </section>
         {activeStory && (
           <div className="story-viewer" role="dialog" aria-modal="true">
-            <button className="story-close" onClick={() => setActiveStory(null)}>×</button>
+            <div
+              className="story-backdrop"
+              style={{ backgroundImage: `url(${activeStory.media_url})` }}
+            />
+            <button className="story-close" onClick={() => { setActiveStory(null); setStoryReply(""); }}>×</button>
             <div className="story-viewer-head">
               <Avatar person={activeStory.author} />
               <span><b>{activeStory.author.display_name}</b><small>{formatAgo(activeStory.created_at, now)} ago</small></span>
@@ -3189,6 +3208,23 @@ export default function Home() {
               <img src={activeStory.media_url} alt={`${activeStory.author.display_name}’s Story`} />
             )}
             {activeStory.caption && <p>{activeStory.caption}</p>}
+            {activeStory.author_id !== user.id && (
+              <form
+                className="story-reply"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void replyToStory();
+                }}
+              >
+                <input
+                  value={storyReply}
+                  onChange={(event) => setStoryReply(event.target.value)}
+                  placeholder={`Reply to ${activeStory.author.display_name.split(" ")[0]}…`}
+                  aria-label="Reply to Story"
+                />
+                <button disabled={!storyReply.trim()} aria-label="Send Story reply">➤</button>
+              </form>
+            )}
           </div>
         )}
         <nav>
