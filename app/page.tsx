@@ -430,6 +430,7 @@ export default function Home() {
   const [crumbs, setCrumbs] = useState<CrumbPost[]>([]);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [commentEmojiOpen, setCommentEmojiOpen] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [pendingFollowerIds, setPendingFollowerIds] = useState<string[]>([]);
   const [crumbComposerOpen, setCrumbComposerOpen] = useState(false);
@@ -951,6 +952,7 @@ export default function Home() {
       return;
     }
     setCommentDraft("");
+    setCommentEmojiOpen(false);
     await loadCrumbs(user.id, crumbFeed);
     await loadBestFriends(user.id);
   }
@@ -2845,6 +2847,7 @@ export default function Home() {
                             onClick={() => {
                               setCommentPostId((current) => current === post.id ? null : post.id);
                               setCommentDraft("");
+                              setCommentEmojiOpen(false);
                             }}
                           >
                             <span>💬</span>
@@ -2921,6 +2924,7 @@ export default function Home() {
                                 onClick={() => {
                                   setCommentPostId(null);
                                   setCommentDraft("");
+                                  setCommentEmojiOpen(false);
                                 }}
                                 aria-label="Close comments"
                               >
@@ -2956,6 +2960,33 @@ export default function Home() {
                                 </div>
                               )}
                             </div>
+                            {commentEmojiOpen && (
+                              <div className="emoji-picker comment-emoji-library">
+                                <div className="emoji-tabs">
+                                  {(Object.keys(emojiGroups) as Array<keyof typeof emojiGroups>).map((category) => (
+                                    <button
+                                      type="button"
+                                      key={category}
+                                      className={emojiCategory === category ? "active" : ""}
+                                      onClick={() => setEmojiCategory(category)}
+                                    >
+                                      {category}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="emoji-grid">
+                                  {emojiGroups[emojiCategory].map((emoji, index) => (
+                                    <button
+                                      type="button"
+                                      key={`${emoji}-${index}`}
+                                      onClick={() => setCommentDraft((current) => current + emoji)}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <form
                               className="crumb-comment-form"
                               onSubmit={(event) => {
@@ -2964,6 +2995,14 @@ export default function Home() {
                               }}
                             >
                               {profile && <Avatar person={profile} />}
+                              <button
+                                type="button"
+                                className={`comment-emoji-button ${commentEmojiOpen ? "active" : ""}`}
+                                onClick={() => setCommentEmojiOpen((current) => !current)}
+                                aria-label="Open emoji library"
+                              >
+                                😊
+                              </button>
                               <input
                                 value={commentDraft}
                                 onChange={(event) => setCommentDraft(event.target.value)}
