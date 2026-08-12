@@ -398,6 +398,7 @@ export default function Home() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
+  const [profileEditField, setProfileEditField] = useState<"name" | "username" | null>(null);
   const [results, setResults] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
@@ -1335,7 +1336,7 @@ export default function Home() {
       return;
     }
     setProfile({ ...profile, username: clean });
-    setProfileMenuOpen(false);
+    setProfileEditField(null);
     setNotice(`Your username is now @${clean}. 🍪`);
   }
 
@@ -1357,6 +1358,7 @@ export default function Home() {
       return;
     }
     setProfile({ ...profile, display_name: clean });
+    setProfileEditField(null);
     setNotice(`Your name is now ${clean}. 🍪`);
   }
 
@@ -3464,6 +3466,7 @@ export default function Home() {
                   setProfileMenuOpen((current) => !current);
                   setNewUsername(profile?.username || "");
                   setNewDisplayName(profile?.display_name || "");
+                  setProfileEditField(null);
                 }}
               >
                 •••
@@ -3502,40 +3505,32 @@ export default function Home() {
                       />
                     </label>
                   </div>
-                  <label>
-                    Change your name
-                    <input
-                      value={newDisplayName}
-                      onChange={(event) => setNewDisplayName(event.target.value)}
-                      placeholder="Your name"
-                      maxLength={40}
-                    />
-                  </label>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={changeDisplayName}
-                  >
-                    {busy ? "Saving…" : "Save name"}
-                  </button>
-                  <label>
-                    Change username
-                    <div className="username">
-                      <span>@</span>
+                  <div className="profile-identity-setting">
+                    <div><small>Name</small><b>{profile?.display_name}</b></div>
+                    <button type="button" onClick={() => { setNewDisplayName(profile?.display_name || ""); setProfileEditField("name"); }}>Edit</button>
+                  </div>
+                  {profileEditField === "name" && (
+                    <div className="profile-inline-editor">
                       <input
-                        value={newUsername}
-                        onChange={(event) => setNewUsername(event.target.value)}
-                        placeholder="your_username"
+                        value={newDisplayName}
+                        onChange={(event) => setNewDisplayName(event.target.value)}
+                        placeholder="Your name"
+                        maxLength={40}
+                        autoFocus
                       />
+                      <div><button type="button" onClick={() => setProfileEditField(null)}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={changeDisplayName}>{busy ? "Saving…" : "Save"}</button></div>
                     </div>
-                  </label>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={changeUsername}
-                  >
-                    {busy ? "Saving…" : "Save username"}
-                  </button>
+                  )}
+                  <div className="profile-identity-setting">
+                    <div><small>Username</small><b>@{profile?.username}</b></div>
+                    <button type="button" onClick={() => { setNewUsername(profile?.username || ""); setProfileEditField("username"); }}>Edit</button>
+                  </div>
+                  {profileEditField === "username" && (
+                    <div className="profile-inline-editor">
+                      <div className="username"><span>@</span><input value={newUsername} onChange={(event) => setNewUsername(event.target.value)} placeholder="your_username" autoFocus /></div>
+                      <div><button type="button" onClick={() => setProfileEditField(null)}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={changeUsername}>{busy ? "Saving…" : "Save"}</button></div>
+                    </div>
+                  )}
                   <button
                     className="danger-button"
                     disabled={busy}
