@@ -428,6 +428,8 @@ export default function Home() {
     "for_you",
   );
   const [crumbs, setCrumbs] = useState<CrumbPost[]>([]);
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [pendingFollowerIds, setPendingFollowerIds] = useState<string[]>([]);
   const [crumbComposerOpen, setCrumbComposerOpen] = useState(false);
@@ -939,7 +941,7 @@ export default function Home() {
 
   async function commentOnCrumb(post: CrumbPost) {
     if (!user) return;
-    const body = window.prompt("Add a comment")?.trim();
+    const body = commentDraft.trim();
     if (!body) return;
     const { error } = await supabase
       .from("crumb_comments")
@@ -948,6 +950,7 @@ export default function Home() {
       setNotice(error.message);
       return;
     }
+    setCommentDraft("");
     await loadCrumbs(user.id, crumbFeed);
     await loadBestFriends(user.id);
   }
@@ -2768,7 +2771,7 @@ export default function Home() {
                     const following = followingIds.includes(post.author_id);
                     return (
                       <article
-                        className={`crumb-card ${post.kind}`}
+                        className={`crumb-card ${post.kind} ${commentPostId === post.id ? "comments-open" : ""}`}
                         key={post.id}
                       >
                         <div className="crumb-media">
@@ -2837,7 +2840,13 @@ export default function Home() {
                             <span>{liked ? "❤️" : "🤍"}</span>
                             <small>{post.likes.length}</small>
                           </button>
-                          <button onClick={() => void commentOnCrumb(post)}>
+                          <button
+                            className={commentPostId === post.id ? "active" : ""}
+                            onClick={() => {
+                              setCommentPostId((current) => current === post.id ? null : post.id);
+                              setCommentDraft("");
+                            }}
+                          >
                             <span>💬</span>
                             <small>{post.comments.length}</small>
                           </button>
@@ -2904,6 +2913,67 @@ export default function Home() {
                             <small>Send</small>
                           </button>
                         </div>
+                        {commentPostId === post.id && (
+                          <aside className="crumb-comments-panel" aria-label="Comments">
+                            <header>
+                              <b>Comments</b>
+                              <button
+                                onClick={() => {
+                                  setCommentPostId(null);
+                                  setCommentDraft("");
+                                }}
+                                aria-label="Close comments"
+                              >
+                                ×
+                              </button>
+                            </header>
+                            <div className="crumb-comments-list">
+                              {post.comments.length ? (
+                                post.comments.map((comment) => {
+                                  const commenter = comment.user_id === profile?.id
+                                    ? profile
+                                    : allProfiles.find((person) => person.id === comment.user_id);
+                                  return (
+                                    <div className="crumb-comment-row" key={comment.id}>
+                                      {commenter ? (
+                                        <Avatar person={commenter} />
+                                      ) : (
+                                        <span className="avatar">C</span>
+                                      )}
+                                      <span>
+                                        <b>{commenter ? `@${commenter.username}` : "Cookie user"}</b>
+                                        <p>{comment.body}</p>
+                                        <small>{formatAgo(comment.created_at, now)} ago</small>
+                                      </span>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="crumb-comments-empty">
+                                  <span>💬</span>
+                                  <b>No comments yet</b>
+                                  <small>Leave the first one.</small>
+                                </div>
+                              )}
+                            </div>
+                            <form
+                              className="crumb-comment-form"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void commentOnCrumb(post);
+                              }}
+                            >
+                              {profile && <Avatar person={profile} />}
+                              <input
+                                value={commentDraft}
+                                onChange={(event) => setCommentDraft(event.target.value)}
+                                placeholder="Add a comment…"
+                                autoFocus
+                              />
+                              <button disabled={!commentDraft.trim()} aria-label="Post comment">➤</button>
+                            </form>
+                          </aside>
+                        )}
                       </article>
                     );
                   })
