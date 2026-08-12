@@ -438,9 +438,11 @@ export default function Home() {
     "video",
   );
   const [crumbCaption, setCrumbCaption] = useState("");
+  const [crumbHashtags, setCrumbHashtags] = useState("");
   const [crumbFile, setCrumbFile] = useState<File | null>(null);
   const [crumbDuration, setCrumbDuration] = useState(30);
   const [crumbAudio, setCrumbAudio] = useState("");
+  const [audibleCrumbIds, setAudibleCrumbIds] = useState<string[]>([]);
   const [now, setNow] = useState(Date.now());
   const searchSequence = useRef(0);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
@@ -846,6 +848,22 @@ export default function Home() {
 
   async function publishCrumb() {
     if (!user) return;
+    const hashtags = Array.from(
+      new Set(
+        crumbHashtags
+          .split(/[\s,]+/)
+          .map((tag) => tag.trim().replace(/^#+/, ""))
+          .filter(Boolean),
+      ),
+    );
+    if (hashtags.length > 8) {
+      setNotice("You can add no more than 8 hashtags.");
+      return;
+    }
+    if (hashtags.some((tag) => !/^[a-z0-9_]+$/i.test(tag))) {
+      setNotice("Hashtags can only contain letters, numbers and underscores.");
+      return;
+    }
     if (crumbKind !== "text" && !crumbFile) {
       setNotice("Choose a photo or video first.");
       return;
@@ -900,7 +918,10 @@ export default function Home() {
         author_id: user.id,
         kind: crumbKind,
         media_path: mediaPath,
-        caption: crumbCaption.trim(),
+        caption: [
+          crumbCaption.trim(),
+          hashtags.map((tag) => `#${tag}`).join(" "),
+        ].filter(Boolean).join("\n"),
         audio_title: crumbAudio.trim() || null,
         duration_seconds: crumbKind === "video" ? crumbDuration : null,
       });
@@ -913,6 +934,7 @@ export default function Home() {
     }
     setCrumbComposerOpen(false);
     setCrumbCaption("");
+    setCrumbHashtags("");
     setCrumbFile(null);
     setCrumbAudio("");
     await loadCrumbs(user.id, crumbFeed);
@@ -2821,7 +2843,7 @@ export default function Home() {
                             <video
                               src={post.media_url}
                               autoPlay
-                              muted
+                              muted={!audibleCrumbIds.includes(post.id)}
                               loop
                               playsInline
                               preload="metadata"
@@ -2838,6 +2860,21 @@ export default function Home() {
                             </div>
                           )}
                           <div className="crumb-shade" />
+                          {post.kind === "video" && post.media_url && (
+                            <button
+                              className="crumb-sound-toggle"
+                              onClick={() =>
+                                setAudibleCrumbIds((current) =>
+                                  current.includes(post.id)
+                                    ? current.filter((id) => id !== post.id)
+                                    : [...current, post.id],
+                                )
+                              }
+                              aria-label={audibleCrumbIds.includes(post.id) ? "Mute video" : "Turn sound on"}
+                            >
+                              {audibleCrumbIds.includes(post.id) ? "🔊" : "🔇"}
+                            </button>
+                          )}
                         </div>
                         <div className="crumb-copy">
                           <div className="crumb-author">
@@ -3138,15 +3175,24 @@ export default function Home() {
                       </div>
                     )}
                     <label>
-                      Caption or text
+                      {crumbKind === "text" ? "Text" : "Caption"}
                       <textarea
                         value={crumbCaption}
                         onChange={(event) =>
                           setCrumbCaption(event.target.value)
                         }
                         maxLength={2000}
-                        placeholder="Leave a crumb…"
+                        placeholder={crumbKind === "text" ? "Leave a Crumb…" : "Write a caption…"}
                       />
+                    </label>
+                    <label>
+                      Hashtags <small className="hashtag-count">{Array.from(new Set(crumbHashtags.split(/[\s,]+/).map((tag) => tag.replace(/^#+/, "")).filter(Boolean))).length}/8</small>
+                      <input
+                        value={crumbHashtags}
+                        onChange={(event) => setCrumbHashtags(event.target.value)}
+                        placeholder="#fun #friends #ghana"
+                      />
+                      <small className="field-help">Separate hashtags with spaces. Maximum 8.</small>
                     </label>
                     <label>
                       Music or original audio
