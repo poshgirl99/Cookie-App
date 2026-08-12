@@ -40,6 +40,7 @@ type Conversation = {
   person_last_read_at?: string | null;
   last_message_at?: string;
   last_sender_id?: string;
+  last_story_reply_to_id?: string | null;
   unread_count: number;
 };
 type BestFriendRanking = {
@@ -71,6 +72,12 @@ type ChatMessage = {
   edited_at: string | null;
   deleted_for_everyone_at: string | null;
   expires_at: string | null;
+  story_reply_to_id?: string | null;
+  story?: {
+    id: string;
+    media_type: "image" | "video";
+    media_url: string | null;
+  } | null;
   audio_url?: string | null;
   reactions?: Reaction[];
   reply?: { id: string; body: string; sender_id: string } | null;
@@ -423,6 +430,7 @@ export default function Home() {
   const [stories, setStories] = useState<StoryPost[]>([]);
   const [activeStory, setActiveStory] = useState<StoryPost | null>(null);
   const [storyReply, setStoryReply] = useState("");
+  const [storySendConfirmation, setStorySendConfirmation] = useState(false);
   const [storyCaption, setStoryCaption] = useState("");
   const [storyFile, setStoryFile] = useState<File | null>(null);
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
@@ -550,7 +558,7 @@ export default function Home() {
             .neq("user_id", accountId),
           supabase
             .from("messages")
-            .select("conversation_id,sender_id,created_at")
+            .select("conversation_id,sender_id,created_at,story_reply_to_id")
             .in("conversation_id", ids)
             .order("created_at", { ascending: false })
             .limit(1000),
@@ -596,6 +604,7 @@ export default function Home() {
                 person_last_read_at: member?.last_read_at,
                 last_message_at: last?.created_at,
                 last_sender_id: last?.sender_id,
+                last_story_reply_to_id: last?.story_reply_to_id,
                 unread_count: unreadCount,
               } as Conversation)
             : null;
@@ -1116,7 +1125,7 @@ export default function Home() {
           supabase
             .from("messages")
             .select(
-              "id,conversation_id,sender_id,body,reply_to_id,created_at,edited_at,deleted_for_everyone_at,expires_at,reactions:message_reactions(emoji,user_id)",
+              "id,conversation_id,sender_id,body,reply_to_id,story_reply_to_id,created_at,edited_at,deleted_for_everyone_at,expires_at,reactions:message_reactions(emoji,user_id)",
             )
             .eq("conversation_id", conversationId)
             .order("created_at"),
@@ -1152,9 +1161,28 @@ export default function Home() {
                 .from("voice-notes")
                 .createSignedUrl(audioPath, 3600)
             : { data: null };
+          let story: ChatMessage["story"] = null;
+          if (item.story_reply_to_id) {
+            const { data: storyRow } = await supabase
+              .from("story_posts")
+              .select("id,media_path,media_type")
+              .eq("id", String(item.story_reply_to_id))
+              .maybeSingle();
+            if (storyRow) {
+              const { data: storyMedia } = await supabase.storage
+                .from("story-media")
+                .createSignedUrl(storyRow.media_path, 3600);
+              story = {
+                id: storyRow.id,
+                media_type: storyRow.media_type,
+                media_url: storyMedia?.signedUrl || null,
+              };
+            }
+          }
           return {
             ...item,
             audio_url: signed?.signedUrl || null,
+            story,
             reply: repliedTo
               ? {
                   id: String(repliedTo.id),
@@ -1732,8 +1760,12 @@ export default function Home() {
     setStoryReply("");
     const chat = await openChat(activeStory.author);
     if (!chat) return;
-    await sendMessage(`Replied to your Story: ${reply}`, chat, user.id);
-    setActiveStory(null);
+    const sent = await sendMessage(reply, chat, user.id, activeStory.id);
+    if (sent) {
+      setStorySendConfirmation(true);
+      window.setTimeout(() => setStorySendConfirmation(false), 1800);
+      setActiveStory(null);
+    }
   }
 
   function broadcastActivity(state: "typing" | "recording" | null) {
@@ -1810,8 +1842,9 @@ export default function Home() {
     text = messageText,
     chat = activeChat,
     senderId = user?.id,
+    storyReplyToId?: string,
   ) {
-    if (!chat || !senderId || !text.trim()) return;
+    if (!chat || !senderId || !text.trim()) return false;
     const clean = text.trim();
     setMessageText("");
     broadcastActivity(null);
@@ -1828,10 +1861,14 @@ export default function Home() {
         sender_id: senderId,
         body: clean,
         reply_to_id: replyingTo?.id || null,
+        story_reply_to_id: storyReplyToId || null,
         expires_at: expiresAt,
       });
     setReplyingTo(null);
-    if (error) setNotice(error.message);
+    if (error) {
+      setNotice(error.message);
+      return false;
+    }
     else {
       await loadMessages(chat.id);
       if (user) {
@@ -1839,6 +1876,7 @@ export default function Home() {
         await loadBestFriends(user.id);
       }
     }
+    return true;
   }
 
   async function reactToMessage(message: ChatMessage, emoji: string) {
@@ -2555,6 +2593,18 @@ export default function Home() {
                                 {message.reply.body.slice(0, 80)}
                               </span>
                             )}
+                            {message.story_reply_to_id && (
+                              <span className="story-message-context">
+                                {message.story?.media_url && (
+                                  message.story.media_type === "video" ? (
+                                    <video src={message.story.media_url} muted playsInline preload="metadata" />
+                                  ) : (
+                                    <img src={message.story.media_url} alt="Story preview" />
+                                  )
+                                )}
+                                <span><small>Replied to story</small></span>
+                              </span>
+                            )}
                             {message.deleted_for_everyone_at ? (
                               <em>
                                 {mine
@@ -2945,7 +2995,9 @@ export default function Home() {
                             <small
                               className={chat.unread_count ? "new-chat" : ""}
                             >
-                              {chat.unread_count ? (
+                              {chat.last_sender_id !== user.id && chat.last_story_reply_to_id ? (
+                                "Replied to your story"
+                              ) : chat.unread_count ? (
                                 chat.unread_count === 1 ? (
                                   "New Chat"
                                 ) : (
@@ -3925,6 +3977,9 @@ export default function Home() {
               </div>
             )}
           </div>
+        )}
+        {storySendConfirmation && (
+          <div className="story-sent-toast" role="status">Sent ✓</div>
         )}
         <nav>
           {(
