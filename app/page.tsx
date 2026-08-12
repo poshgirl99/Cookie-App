@@ -18,6 +18,9 @@ type Profile = {
   profile_colour: string;
   avatar_url: string | null;
   cover_url: string | null;
+  bio?: string;
+  flavour?: string | null;
+  interests?: string[];
   is_private?: boolean;
 };
 type FriendRequest = {
@@ -405,6 +408,7 @@ export default function Home() {
   const [newDisplayName, setNewDisplayName] = useState("");
   const [profileEditField, setProfileEditField] = useState<"name" | "username" | null>(null);
   const [results, setResults] = useState<Profile[]>([]);
+  const [previewProfile, setPreviewProfile] = useState<Profile | null>(null);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Profile[]>([]);
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
@@ -689,7 +693,7 @@ export default function Home() {
       const { data } = await supabase
         .from("profiles")
         .select(
-          "id,username,display_name,profile_colour,avatar_url,cover_url,is_private",
+          "id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests,is_private",
         )
         .eq("id", account.id)
         .maybeSingle();
@@ -716,7 +720,7 @@ export default function Home() {
           .from("profiles")
           .upsert(fallback)
           .select(
-            "id,username,display_name,profile_colour,avatar_url,cover_url,is_private",
+            "id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests,is_private",
           )
           .single();
         currentProfile = (created as Profile | null) ?? fallback;
@@ -726,7 +730,7 @@ export default function Home() {
       const { data: incoming } = await supabase
         .from("friend_requests")
         .select(
-          "id,requester_id,recipient_id,status,introduction_message,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)",
+          "id,requester_id,recipient_id,status,introduction_message,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests)",
         )
         .eq("recipient_id", account.id)
         .eq("status", "pending");
@@ -749,7 +753,7 @@ export default function Home() {
       const { data: accepted } = await supabase
         .from("friend_requests")
         .select(
-          "requester_id,recipient_id,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url),recipient:profiles!friend_requests_recipient_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)",
+          "requester_id,recipient_id,requester:profiles!friend_requests_requester_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests),recipient:profiles!friend_requests_recipient_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests)",
         )
         .eq("status", "accepted")
         .or(`requester_id.eq.${account.id},recipient_id.eq.${account.id}`);
@@ -763,7 +767,7 @@ export default function Home() {
       setFriends(list);
       const { data: directory } = await supabase
         .from("profiles")
-        .select("id,username,display_name,profile_colour,avatar_url,cover_url")
+        .select("id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests")
         .neq("id", account.id)
         .order("display_name")
         .limit(200);
@@ -1465,7 +1469,7 @@ export default function Home() {
     }
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,username,display_name,profile_colour,avatar_url,cover_url")
+      .select("id,username,display_name,profile_colour,avatar_url,cover_url,bio,flavour,interests")
       .limit(100);
     if (sequence !== searchSequence.current) return;
     if (error) {
@@ -2940,11 +2944,7 @@ export default function Home() {
                   <h3>People</h3>
                   {results.map((person) => (
                     <div className="person" key={person.id}>
-                      <Avatar person={person} />
-                      <div>
-                        <b>{person.display_name}</b>
-                        <small>@{person.username}</small>
-                      </div>
+                      <ProfilePeekButton person={person} onOpen={setPreviewProfile} />
                       <button
                         disabled={
                           friends.some((friend) => friend.id === person.id) ||
@@ -2967,12 +2967,8 @@ export default function Home() {
                   <h3>Requests</h3>
                   {requests.map((request) => (
                     <div className="person request" key={request.id}>
-                      {request.requester && (
-                        <Avatar person={request.requester} />
-                      )}
-                      <div>
-                        <b>{request.requester?.display_name}</b>
-                        <small>@{request.requester?.username}</small>
+                      {request.requester && <ProfilePeekButton person={request.requester} onOpen={setPreviewProfile} />}
+                      <div className="request-introduction">
                         {request.introduction_message && (
                           <em>“{request.introduction_message}”</em>
                         )}
@@ -3006,11 +3002,7 @@ export default function Home() {
                       )
                       .map((person) => (
                         <div className="person" key={person.id}>
-                          <Avatar person={person} />
-                          <div>
-                            <b>{person.display_name}</b>
-                            <small>@{person.username}</small>
-                          </div>
+                          <ProfilePeekButton person={person} onOpen={setPreviewProfile} />
                           <button
                             disabled={sentRequestIds.includes(person.id)}
                             onClick={() => addFriend(person)}
@@ -3028,11 +3020,7 @@ export default function Home() {
                   <h3>Your friends</h3>
                   {friends.map((person) => (
                     <div className="person" key={person.id}>
-                      <Avatar person={person} />
-                      <div>
-                        <b>{person.display_name}</b>
-                        <small>@{person.username}</small>
-                      </div>
+                      <ProfilePeekButton person={person} onOpen={setPreviewProfile} />
                       <button onClick={() => openChat(person)}>Message</button>
                     </div>
                   ))}
@@ -3672,6 +3660,44 @@ export default function Home() {
             </div>
           )}
         </section>
+        {previewProfile && (
+          <div className="friend-profile-modal" role="dialog" aria-modal="true" aria-labelledby="friend-profile-name">
+            <article className="friend-profile-card">
+              <button className="friend-profile-close" aria-label="Close profile" onClick={() => setPreviewProfile(null)}>×</button>
+              <div
+                className={`friend-profile-cover ${previewProfile.cover_url ? "has-cover" : ""}`}
+                style={previewProfile.cover_url ? { backgroundImage: `url("${previewProfile.cover_url}")` } : { background: `linear-gradient(135deg, ${previewProfile.profile_colour}, #f4be68)` }}
+              />
+              <div className="friend-profile-identity">
+                <Avatar person={previewProfile} />
+                <h2 id="friend-profile-name">{previewProfile.display_name}</h2>
+                <p>@{previewProfile.username}</p>
+              </div>
+              <div className="friend-energy-card">
+                <span>✨</span>
+                <div><small>COOKIE ENERGY</small><b>{previewProfile.flavour || "Freshly baked"}</b></div>
+              </div>
+              {previewProfile.bio && <p className="friend-profile-bio">{previewProfile.bio}</p>}
+              {previewProfile.interests && previewProfile.interests.length > 0 && (
+                <div className="friend-interest-list">
+                  {previewProfile.interests.map((interest) => <span key={interest}>{interest}</span>)}
+                </div>
+              )}
+              <div className="friend-profile-actions">
+                {friends.some((friend) => friend.id === previewProfile.id) ? (
+                  <button onClick={() => { const person = previewProfile; setPreviewProfile(null); void openChat(person); }}>Message</button>
+                ) : (
+                  <button
+                    disabled={sentRequestIds.includes(previewProfile.id)}
+                    onClick={() => { const person = previewProfile; setPreviewProfile(null); void addFriend(person); }}
+                  >
+                    {sentRequestIds.includes(previewProfile.id) ? "Added" : "Add friend"}
+                  </button>
+                )}
+              </div>
+            </article>
+          </div>
+        )}
         {groupComposerOpen && (
           <div className="group-modal" role="dialog" aria-modal="true" aria-labelledby="group-title">
             <form
@@ -3805,6 +3831,15 @@ function Avatar({ person }: { person: Profile }) {
         person.display_name?.[0]?.toUpperCase() || "C"
       )}
     </span>
+  );
+}
+function ProfilePeekButton({ person, onOpen }: { person: Profile; onOpen: (person: Profile) => void }) {
+  return (
+    <button className="profile-peek-button" type="button" onClick={() => onOpen(person)} aria-label={`View ${person.display_name}’s profile`}>
+      <Avatar person={person} />
+      <span><b>{person.display_name}</b><small>@{person.username}</small></span>
+      <i>›</i>
+    </button>
   );
 }
 function CrumbStatus({
