@@ -2222,10 +2222,10 @@ export default function Home() {
                 </div>
                 <div className="folder-row">
                   <button className="active">All</button>
-                  <button>Friends</button>
-                  <button>Family</button>
-                  <button>School</button>
+                  <button>Unread</button>
                   <button>Groups</button>
+                  <button>Best Friends</button>
+                  <button>Unreplied</button>
                 </div>
                 {requests.length > 0 && (
                   <button
