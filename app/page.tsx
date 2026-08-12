@@ -38,6 +38,13 @@ type Conversation = {
   last_sender_id?: string;
   unread_count: number;
 };
+type BestFriendRanking = {
+  friend_id: string;
+  rank: number;
+  first_number_one_at: string | null;
+  mutual_number_one_at: string | null;
+  friend: Profile;
+};
 type Reaction = { emoji: string; user_id: string };
 type ChatMessage = {
   id: string;
@@ -385,6 +392,7 @@ export default function Home() {
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [sentRequestIds, setSentRequestIds] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [bestFriends, setBestFriends] = useState<BestFriendRanking[]>([]);
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hiddenMessageIds, setHiddenMessageIds] = useState<string[]>([]);
@@ -549,6 +557,38 @@ export default function Home() {
     [supabase],
   );
 
+  const loadBestFriends = useCallback(
+    async (accountId: string) => {
+      const { error: refreshError } = await supabase.rpc(
+        "refresh_my_best_friends",
+      );
+      if (refreshError) {
+        setNotice(`Best Friends could not update: ${refreshError.message}`);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("best_friend_rankings")
+        .select(
+          "friend_id,rank,first_number_one_at,mutual_number_one_at,friend:profiles!best_friend_rankings_friend_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)",
+        )
+        .eq("user_id", accountId)
+        .order("rank");
+      if (error) {
+        setNotice(`Best Friends could not load: ${error.message}`);
+        return;
+      }
+      setBestFriends(
+        (data ?? []).map((row: Record<string, unknown>) => ({
+          ...row,
+          friend: (Array.isArray(row.friend)
+            ? row.friend[0]
+            : row.friend) as Profile,
+        })) as BestFriendRanking[],
+      );
+    },
+    [supabase],
+  );
+
   const loadAccount = useCallback(
     async (account: User | null) => {
       setUser(account);
@@ -559,6 +599,7 @@ export default function Home() {
         setAllProfiles([]);
         setSentRequestIds([]);
         setConversations([]);
+        setBestFriends([]);
         setActiveChat(null);
         return;
       }
@@ -653,9 +694,10 @@ export default function Home() {
         (followerRequests ?? []).map((row) => row.follower_id),
       );
       await loadConversations(account.id);
+      await loadBestFriends(account.id);
       await loadCrumbs(account.id);
     },
-    [loadConversations, loadCrumbs, supabase],
+    [loadBestFriends, loadConversations, loadCrumbs, supabase],
   );
 
   useEffect(() => {
@@ -802,6 +844,7 @@ export default function Home() {
       return;
     }
     await loadCrumbs(user.id, crumbFeed);
+    await loadBestFriends(user.id);
   }
 
   async function commentOnCrumb(post: CrumbPost) {
@@ -816,6 +859,7 @@ export default function Home() {
       return;
     }
     await loadCrumbs(user.id, crumbFeed);
+    await loadBestFriends(user.id);
   }
 
   async function followCrumbCreator(person: Profile) {
@@ -1444,7 +1488,10 @@ export default function Home() {
     if (error) setNotice(error.message);
     else {
       await loadMessages(chat.id);
-      if (user) await loadConversations(user.id);
+      if (user) {
+        await loadConversations(user.id);
+        await loadBestFriends(user.id);
+      }
     }
   }
 
@@ -1822,11 +1869,15 @@ export default function Home() {
       </main>
     );
 
+  const bestFriendById = new Map(
+    bestFriends.map((ranking) => [ranking.friend_id, ranking]),
+  );
   const visibleConversations = conversations.filter((chat) => {
     if (chatFilter === "unread")
       return chat.last_sender_id !== user.id && chat.unread_count > 0;
     if (chatFilter === "groups") return chat.kind === "group";
-    if (chatFilter === "best_friends") return false;
+    if (chatFilter === "best_friends")
+      return bestFriendById.has(chat.person.id);
     if (chatFilter === "unreplied")
       return Boolean(chat.last_message_at) &&
         chat.last_sender_id !== user.id &&
@@ -1842,8 +1893,8 @@ export default function Home() {
     unread: ["No unread chats", "New chats you have not opened will appear here."],
     groups: ["No groups yet", "Groups you join will appear here."],
     best_friends: [
-      "Best Friends is coming next",
-      "We’ll build this part together soon.",
+      "No Best Friends yet",
+      "Keep chatting and sharing Crumbs. Your six closest friends will appear automatically.",
     ],
     unreplied: [
       "You’re all caught up",
@@ -2293,6 +2344,27 @@ export default function Home() {
                 {visibleConversations.length > 0 ? (
                   <div className="chat-list">
                     {visibleConversations.map((chat) => {
+                      const bestFriend = bestFriendById.get(chat.person.id);
+                      const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
+                      const mutualForTwoWeeks = Boolean(
+                        bestFriend?.rank === 1 &&
+                          bestFriend.mutual_number_one_at &&
+                          new Date(bestFriend.mutual_number_one_at).getTime() <=
+                            twoWeeksAgo,
+                      );
+                      const numberOneForTwoWeeks = Boolean(
+                        bestFriend?.rank === 1 &&
+                          bestFriend.first_number_one_at &&
+                          new Date(bestFriend.first_number_one_at).getTime() <=
+                            twoWeeksAgo,
+                      );
+                      const bestFriendEmoji = bestFriend
+                        ? mutualForTwoWeeks
+                          ? "❤️"
+                          : numberOneForTwoWeeks
+                            ? "🩷"
+                            : "🤗"
+                        : "";
                       const read = Boolean(
                         chat.last_message_at &&
                           chat.person_last_read_at &&
@@ -2309,7 +2381,23 @@ export default function Home() {
                         >
                           <Avatar person={chat.person} />
                           <span>
-                            <b>{chat.person.display_name}</b>
+                            <b>
+                              {chat.person.display_name}{" "}
+                              {bestFriendEmoji && (
+                                <span
+                                  className="best-friend-emoji"
+                                  title={
+                                    mutualForTwoWeeks
+                                      ? "You’ve been each other’s #1 Best Friend for two weeks"
+                                      : numberOneForTwoWeeks
+                                        ? `${chat.person.display_name} has been your #1 Best Friend for two weeks`
+                                        : "One of your six Best Friends"
+                                  }
+                                >
+                                  {bestFriendEmoji}
+                                </span>
+                              )}
+                            </b>
                             <small
                               className={chat.unread_count ? "new-chat" : ""}
                             >
@@ -2332,6 +2420,13 @@ export default function Home() {
                               )}
                               {age && <time>· {age}</time>}
                             </small>
+                            {(mutualForTwoWeeks || numberOneForTwoWeeks) && (
+                              <small className="best-friend-milestone">
+                                {mutualForTwoWeeks
+                                  ? "You’ve been each other’s #1 Best Friend for two weeks"
+                                  : `${chat.person.display_name} has been your #1 Best Friend for two weeks`}
+                              </small>
+                            )}
                           </span>
                           <i>›</i>
                         </button>
