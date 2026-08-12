@@ -2567,28 +2567,16 @@ export default function Home() {
                   }
                 >
                   <div className="desktop-stage-overlay" />
-                  <div className="camera-preview-card">
-                    <button
-                      className="camera-orb"
-                      onClick={() =>
-                        setNotice("Cookie Camera is coming next 🍪")
-                      }
-                      aria-label="Open Cookie Camera"
-                    >
-                      <span>📷</span>
-                    </button>
-                    <h2>Capture a Cookie moment</h2>
-                    <p>Choose a chat or open the camera to share something.</p>
-                    <div className="camera-effects" aria-hidden="true">
-                      <i>🍪</i><i>✨</i><i>🩷</i><i>🤗</i>
-                    </div>
-                  </div>
                   {profile && (
-                    <div className="desktop-profile-figure">
+                    <button
+                      className="desktop-profile-figure"
+                      onClick={() => setView("profile")}
+                      aria-label="Open your profile"
+                    >
                       <Avatar person={profile} />
                       <b>{profile.display_name}</b>
                       <small>@{profile.username}</small>
-                    </div>
+                    </button>
                   )}
                 </aside>
               </div>
