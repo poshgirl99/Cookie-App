@@ -408,6 +408,7 @@ export default function Home() {
   const [activeStory, setActiveStory] = useState<StoryPost | null>(null);
   const [storyReply, setStoryReply] = useState("");
   const [storyCaption, setStoryCaption] = useState("");
+  const [storyFile, setStoryFile] = useState<File | null>(null);
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hiddenMessageIds, setHiddenMessageIds] = useState<string[]>([]);
@@ -420,6 +421,8 @@ export default function Home() {
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(
     null,
   );
+  const [messageReactionMenuId, setMessageReactionMenuId] = useState<string | null>(null);
+  const [messageDeleteMenuId, setMessageDeleteMenuId] = useState<string | null>(null);
   const [peerActivity, setPeerActivity] = useState<
     "typing" | "recording" | null
   >(null);
@@ -452,7 +455,6 @@ export default function Home() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const crumbActionLocks = useRef(new Set<string>());
 
   const loadCrumbs = useCallback(
     async (accountId: string, feed: "for_you" | "following" = crumbFeed) => {
@@ -842,6 +844,7 @@ export default function Home() {
       return;
     }
     setStoryCaption("");
+    setStoryFile(null);
     await loadStories(user.id);
     setNotice("Your Story is live for 24 hours ✨");
   }
@@ -947,9 +950,6 @@ export default function Home() {
     active: boolean,
   ) {
     if (!user) return;
-    const lockKey = `${table}:${post.id}:${user.id}`;
-    if (crumbActionLocks.current.has(lockKey)) return;
-    crumbActionLocks.current.add(lockKey);
     const actionField = table === "crumb_likes"
       ? "likes"
       : table === "crumb_saves"
@@ -985,13 +985,11 @@ export default function Home() {
             { onConflict: "post_id,user_id", ignoreDuplicates: true },
           );
     const { error } = await request;
-    crumbActionLocks.current.delete(lockKey);
     if (error) {
       applyOptimisticState(active);
       setNotice("That action couldn’t update. Please try once more.");
       return;
     }
-    void loadBestFriends(user.id);
   }
 
   async function commentOnCrumb(post: CrumbPost) {
@@ -1547,13 +1545,13 @@ export default function Home() {
     return chat;
   }
 
-  async function replyToStory() {
-    if (!activeStory || !user || !storyReply.trim()) return;
+  async function replyToStory(quickReply?: string) {
+    const reply = (quickReply ?? storyReply).trim();
+    if (!activeStory || !user || !reply) return;
     if (activeStory.author_id === user.id) {
       setNotice("You can’t reply to your own Story.");
       return;
     }
-    const reply = storyReply.trim();
     setStoryReply("");
     const chat = await openChat(activeStory.author);
     if (!chat) return;
@@ -1671,6 +1669,21 @@ export default function Home() {
     const exists = message.reactions?.some(
       (item) => item.user_id === user.id && item.emoji === emoji,
     );
+    setMessages((current) =>
+      current.map((item) => {
+        if (item.id !== message.id) return item;
+        const reactions = item.reactions || [];
+        return {
+          ...item,
+          reactions: exists
+            ? reactions.filter(
+                (reaction) =>
+                  !(reaction.user_id === user.id && reaction.emoji === emoji),
+              )
+            : [...reactions, { user_id: user.id, emoji }],
+        };
+      }),
+    );
     const query = supabase.from("message_reactions");
     const { error } = exists
       ? await query
@@ -1679,8 +1692,11 @@ export default function Home() {
           .eq("user_id", user.id)
           .eq("emoji", emoji)
       : await query.insert({ message_id: message.id, user_id: user.id, emoji });
-    if (error) setNotice(error.message);
-    else if (activeChat) await loadMessages(activeChat.id);
+    if (error) {
+      setNotice(error.message);
+      if (activeChat) await loadMessages(activeChat.id);
+    }
+    setMessageReactionMenuId(null);
   }
 
   async function editMessage(message: ChatMessage) {
@@ -1711,7 +1727,19 @@ export default function Home() {
       if (error) setNotice(error.message);
     }
     setSelectedMessage(null);
+    setMessageDeleteMenuId(null);
     if (activeChat) await loadMessages(activeChat.id);
+  }
+
+  function messageIsVisible(message: ChatMessage) {
+    if (!activeChat) return true;
+    if (activeChat.disappearing_mode === "never") return true;
+    const createdAt = new Date(message.created_at).getTime();
+    if (activeChat.disappearing_mode === "24_hours")
+      return createdAt + 24 * 60 * 60 * 1000 > now;
+    if (activeChat.disappearing_mode === "2_days")
+      return createdAt + 48 * 60 * 60 * 1000 > now;
+    return !message.expires_at || new Date(message.expires_at).getTime() > now;
   }
 
   async function togglePin(message: ChatMessage) {
@@ -2150,8 +2178,7 @@ export default function Home() {
                     .filter(
                       (message) =>
                         !hiddenMessageIds.includes(message.id) &&
-                        (!message.expires_at ||
-                          new Date(message.expires_at).getTime() > Date.now()),
+                        messageIsVisible(message),
                     )
                     .map((message) => {
                       const mine = message.sender_id === user.id;
@@ -2193,6 +2220,62 @@ export default function Home() {
                             swipeStart.current = null;
                           }}
                         >
+                          {!message.deleted_for_everyone_at && (
+                            <div className="message-hover-tools" aria-label="Message tools">
+                              <button
+                                title={pinnedMessageIds.includes(message.id) ? "Remove from saved messages" : "Save in chat"}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void togglePin(message);
+                                }}
+                              >
+                                {pinnedMessageIds.includes(message.id) ? "★" : "☆"}
+                              </button>
+                              <button
+                                title="Copy message"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void navigator.clipboard.writeText(message.body);
+                                  setNotice("Message copied.");
+                                }}
+                              >
+                                ⧉
+                              </button>
+                              <button
+                                title="React"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setMessageReactionMenuId((current) => current === message.id ? null : message.id);
+                                  setMessageDeleteMenuId(null);
+                                }}
+                              >
+                                ☺
+                              </button>
+                              <button
+                                title="Delete"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setMessageDeleteMenuId((current) => current === message.id ? null : message.id);
+                                  setMessageReactionMenuId(null);
+                                }}
+                              >
+                                ⌫
+                              </button>
+                            </div>
+                          )}
+                          {messageReactionMenuId === message.id && (
+                            <div className="message-hover-popover reaction-popover">
+                              {["😂", "😭", "♥️", "❓️", "🔥", "🤯"].map((emoji) => (
+                                <button key={emoji} onClick={() => void reactToMessage(message, emoji)}>{emoji}</button>
+                              ))}
+                            </div>
+                          )}
+                          {messageDeleteMenuId === message.id && (
+                            <div className="message-hover-popover delete-popover">
+                              <button onClick={() => void deleteMessage(message, false)}>Delete for me</button>
+                              {mine && <button onClick={() => void deleteMessage(message, true)}>Delete for everyone</button>}
+                            </div>
+                          )}
                           <div
                             role="button"
                             tabIndex={0}
@@ -2297,7 +2380,7 @@ export default function Home() {
                           {selectedMessage?.id === message.id && (
                             <div className="message-actions">
                               <div className="quick-reactions">
-                                {["🍪", "❤️", "😂", "😮", "😢", "👍"].map(
+                                {["😂", "😭", "♥️", "❓️", "🔥", "🤯"].map(
                                   (emoji) => (
                                     <button
                                       key={emoji}
@@ -2877,12 +2960,16 @@ export default function Home() {
                           )}
                         </div>
                         <div className="crumb-copy">
+                          {reposted && (
+                            <div className="crumb-repost-badge">
+                              <span>🍪</span>
+                              <b>You reposted</b>
+                              <i>↻</i>
+                            </div>
+                          )}
                           <div className="crumb-author">
                             <Avatar person={post.author} />
                             <span>
-                              {reposted && (
-                                <small className="crumb-reposted-label">↻ You reposted</small>
-                              )}
                               <b>@{post.author.username}</b>
                               <small>
                                 {formatAgo(post.created_at, now)} ago
@@ -3238,18 +3325,32 @@ export default function Home() {
                     disabled={busy}
                     onChange={(event) => {
                       const file = event.target.files?.[0] || null;
-                      void publishStory(file);
+                      setStoryFile(file);
+                      setStoryCaption("");
                       event.currentTarget.value = "";
                     }}
                   />
                 </label>
               </div>
-              <input
-                className="story-caption-input"
-                value={storyCaption}
-                onChange={(event) => setStoryCaption(event.target.value)}
-                placeholder="Optional caption for your next Story…"
-              />
+              {storyFile && (
+                <div className="story-post-draft">
+                  <div>
+                    <b>Ready to share</b>
+                    <small>{storyFile.name}</small>
+                  </div>
+                  <input
+                    className="story-caption-input"
+                    value={storyCaption}
+                    onChange={(event) => setStoryCaption(event.target.value)}
+                    placeholder="Add a caption (optional)…"
+                    autoFocus
+                  />
+                  <button className="outline" onClick={() => { setStoryFile(null); setStoryCaption(""); }}>Cancel</button>
+                  <button className="primary" disabled={busy} onClick={() => void publishStory(storyFile)}>
+                    {busy ? "Posting…" : "Post Story"}
+                  </button>
+                </div>
+              )}
               {stories.length > 0 ? (
                 <div className="story-grid">
                   {stories.map((story) => (
@@ -3408,21 +3509,28 @@ export default function Home() {
             )}
             {activeStory.caption && <p>{activeStory.caption}</p>}
             {activeStory.author_id !== user.id && (
-              <form
-                className="story-reply"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void replyToStory();
-                }}
-              >
-                <input
-                  value={storyReply}
-                  onChange={(event) => setStoryReply(event.target.value)}
-                  placeholder={`Reply to ${activeStory.author.display_name.split(" ")[0]}…`}
-                  aria-label="Reply to Story"
-                />
-                <button disabled={!storyReply.trim()} aria-label="Send Story reply">➤</button>
-              </form>
+              <div className="story-reply-area">
+                <div className="story-quick-replies" aria-label="Quick replies">
+                  {["😂", "😭", "♥️", "❓️", "🔥", "🤯"].map((emoji) => (
+                    <button key={emoji} onClick={() => void replyToStory(emoji)} aria-label={`Reply ${emoji}`}>{emoji}</button>
+                  ))}
+                </div>
+                <form
+                  className="story-reply"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void replyToStory();
+                  }}
+                >
+                  <input
+                    value={storyReply}
+                    onChange={(event) => setStoryReply(event.target.value)}
+                    placeholder={`Reply to ${activeStory.author.display_name.split(" ")[0]}…`}
+                    aria-label="Reply to Story"
+                  />
+                  <button disabled={!storyReply.trim()} aria-label="Send Story reply">➤</button>
+                </form>
+              </div>
             )}
           </div>
         )}
