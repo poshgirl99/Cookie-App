@@ -2148,6 +2148,49 @@ button:disabled {
   font-size: 9px;
   opacity: 0.66;
 }
+.story-message-context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -2px -2px 7px;
+  padding: 4px 6px 4px 4px;
+  border-radius: 9px;
+  background: #fff8;
+  color: #725b50;
+  opacity: .72;
+}
+.mine .story-message-context { background: #fff2; color: #f5dfd2; }
+.story-message-context > img,
+.story-message-context > video {
+  width: 30px;
+  height: 38px;
+  flex: 0 0 30px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.story-message-context small {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.story-sent-toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  padding: 10px 17px;
+  border-radius: 999px;
+  background: #3c2118;
+  color: white;
+  font-weight: 900;
+  box-shadow: 0 12px 34px #2b160c55;
+  animation: story-sent-in 180ms ease-out;
+}
+@keyframes story-sent-in {
+  from { opacity: 0; transform: translate(-50%, 8px) scale(.92); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
 .message-bubble.deleted {
   background: #f5ecdf;
   color: #8b776a;
