@@ -2405,7 +2405,6 @@ export default function Home() {
                               </span>
                             ) : message.body.startsWith("__audio__:") ? (
                               <span className="voice-note">
-                                <b>Voice note</b>
                                 {message.audio_url ? (
                                   <audio
                                     controls
