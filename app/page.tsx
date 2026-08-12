@@ -1763,8 +1763,8 @@ export default function Home() {
     const sent = await sendMessage(reply, chat, user.id, activeStory.id);
     if (sent) {
       setStorySendConfirmation(true);
-      window.setTimeout(() => setStorySendConfirmation(false), 1800);
-      setActiveStory(null);
+      window.setTimeout(() => setActiveStory(null), 450);
+      window.setTimeout(() => setStorySendConfirmation(false), 2800);
     }
   }
 
