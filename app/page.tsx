@@ -423,6 +423,7 @@ export default function Home() {
   );
   const [messageReactionMenuId, setMessageReactionMenuId] = useState<string | null>(null);
   const [messageDeleteMenuId, setMessageDeleteMenuId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [peerActivity, setPeerActivity] = useState<
     "typing" | "recording" | null
   >(null);
@@ -455,6 +456,7 @@ export default function Home() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const copiedMessageTimer = useRef<number | null>(null);
 
   const loadCrumbs = useCallback(
     async (accountId: string, feed: "for_you" | "following" = crumbFeed) => {
@@ -1733,6 +1735,7 @@ export default function Home() {
 
   function messageIsVisible(message: ChatMessage) {
     if (!activeChat) return true;
+    if (pinnedMessageIds.includes(message.id)) return true;
     if (activeChat.disappearing_mode === "never") return true;
     const createdAt = new Date(message.created_at).getTime();
     if (activeChat.disappearing_mode === "24_hours")
@@ -1745,6 +1748,11 @@ export default function Home() {
   async function togglePin(message: ChatMessage) {
     if (!user || !activeChat) return;
     const pinned = pinnedMessageIds.includes(message.id);
+    setPinnedMessageIds((current) =>
+      pinned
+        ? current.filter((id) => id !== message.id)
+        : [...current, message.id],
+    );
     const query = supabase.from("message_pins");
     const { error } = pinned
       ? await query
@@ -1756,9 +1764,32 @@ export default function Home() {
           message_id: message.id,
           pinned_by: user.id,
         });
-    if (error) setNotice(error.message);
-    else await loadMessages(activeChat.id);
+    if (error) {
+      setPinnedMessageIds((current) =>
+        pinned
+          ? [...current.filter((id) => id !== message.id), message.id]
+          : current.filter((id) => id !== message.id),
+      );
+      setNotice(error.message);
+    } else {
+      setNotice(pinned ? "Message removed from saved chat." : "Message saved in chat.");
+    }
     setSelectedMessage(null);
+  }
+
+  async function copyMessage(message: ChatMessage) {
+    try {
+      await navigator.clipboard.writeText(message.body);
+      setCopiedMessageId(message.id);
+      if (copiedMessageTimer.current)
+        window.clearTimeout(copiedMessageTimer.current);
+      copiedMessageTimer.current = window.setTimeout(
+        () => setCopiedMessageId(null),
+        1800,
+      );
+    } catch {
+      setNotice("Cookie could not copy that message.");
+    }
   }
 
   async function changeDisappearingMode(
@@ -2169,7 +2200,7 @@ export default function Home() {
                 </div>
                 {pinnedMessageIds.length > 0 && (
                   <div className="pinned-strip">
-                    📌 {pinnedMessageIds.length} pinned message
+                    ★ {pinnedMessageIds.length} saved message
                     {pinnedMessageIds.length > 1 ? "s" : ""}
                   </div>
                 )}
@@ -2237,8 +2268,7 @@ export default function Home() {
                                 title="Copy message"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  void navigator.clipboard.writeText(message.body);
-                                  setNotice("Message copied.");
+                                  void copyMessage(message);
                                 }}
                               >
                                 ⧉
@@ -2263,9 +2293,12 @@ export default function Home() {
                                   setMessageReactionMenuId(null);
                                 }}
                               >
-                                ⌫
+                                🗑
                               </button>
                             </div>
+                          )}
+                          {copiedMessageId === message.id && (
+                            <span className="message-copied-toast" role="status">Copied!</span>
                           )}
                           {messageReactionMenuId === message.id && (
                             <div className="message-hover-popover reaction-popover">
