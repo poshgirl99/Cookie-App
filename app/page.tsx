@@ -957,6 +957,14 @@ export default function Home() {
     await loadBestFriends(user.id);
   }
 
+  function animateCrumbAction(event: { currentTarget: HTMLButtonElement }) {
+    const button = event.currentTarget;
+    button.classList.remove("tap-animate");
+    void button.offsetWidth;
+    button.classList.add("tap-animate");
+    window.setTimeout(() => button.classList.remove("tap-animate"), 520);
+  }
+
   async function followCrumbCreator(person: Profile) {
     if (!user || person.id === user.id) return;
     const pending = Boolean(person.is_private);
@@ -2830,6 +2838,7 @@ export default function Home() {
                         <div className="crumb-actions">
                           <button
                             className={liked ? "active" : ""}
+                            onPointerDown={animateCrumbAction}
                             onClick={() =>
                               void toggleCrumbAction(post, "crumb_likes", liked)
                             }
@@ -2839,6 +2848,7 @@ export default function Home() {
                           </button>
                           <button
                             className={commentPostId === post.id ? "active" : ""}
+                            onPointerDown={animateCrumbAction}
                             onClick={() => {
                               setCommentPostId((current) => current === post.id ? null : post.id);
                               setCommentDraft("");
@@ -2850,6 +2860,7 @@ export default function Home() {
                           </button>
                           <button
                             className={reposted ? "active" : ""}
+                            onPointerDown={animateCrumbAction}
                             onClick={() =>
                               void toggleCrumbAction(
                                 post,
@@ -2862,6 +2873,7 @@ export default function Home() {
                             <small>{post.reposts.length}</small>
                           </button>
                           <button
+                            onPointerDown={animateCrumbAction}
                             onClick={async () => {
                               const url = `${publicAppUrl}?crumb=${post.id}`;
                               if (navigator.share)
@@ -2881,6 +2893,7 @@ export default function Home() {
                           </button>
                           <button
                             className={saved ? "active" : ""}
+                            onPointerDown={animateCrumbAction}
                             onClick={() =>
                               void toggleCrumbAction(post, "crumb_saves", saved)
                             }
@@ -2889,6 +2902,7 @@ export default function Home() {
                             <small>Save</small>
                           </button>
                           <button
+                            onPointerDown={animateCrumbAction}
                             onClick={() => {
                               const person = friends[0];
                               if (person)
