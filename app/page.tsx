@@ -457,6 +457,7 @@ export default function Home() {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
   const copiedMessageTimer = useRef<number | null>(null);
 
   const loadCrumbs = useCallback(
@@ -2277,6 +2278,23 @@ export default function Home() {
                             <div className="message-hover-tools" aria-label="Message tools">
                               <button
                                 type="button"
+                                title="Reply to message"
+                                aria-label="Reply to message"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setReplyingTo(message);
+                                  setSelectedMessage(null);
+                                  setMessageReactionMenuId(null);
+                                  setMessageDeleteMenuId(null);
+                                  window.requestAnimationFrame(() =>
+                                    messageInputRef.current?.focus(),
+                                  );
+                                }}
+                              >
+                                ↩
+                              </button>
+                              <button
+                                type="button"
                                 title={pinnedMessageIds.includes(message.id) ? "Remove from saved messages" : "Save in chat"}
                                 onClick={(event) => {
                                   event.stopPropagation();
@@ -2562,6 +2580,7 @@ export default function Home() {
                       ＋
                     </button>
                     <input
+                      ref={messageInputRef}
                       value={messageText}
                       onChange={(event) =>
                         updateMessageText(event.target.value)
