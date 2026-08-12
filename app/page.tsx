@@ -1522,6 +1522,38 @@ export default function Home() {
     setNotice(`Friend request sent to @${person.username}!`);
   }
 
+  async function unaddFriend(person: Profile) {
+    if (!user) return;
+    if (
+      !window.confirm(
+        `Unadd ${person.display_name}? You can add each other again later.`,
+      )
+    )
+      return;
+
+    setBusy(true);
+    setNotice("");
+    const { error } = await supabase
+      .from("friend_requests")
+      .delete()
+      .eq("status", "accepted")
+      .or(
+        `and(requester_id.eq.${user.id},recipient_id.eq.${person.id}),and(requester_id.eq.${person.id},recipient_id.eq.${user.id})`,
+      );
+    setBusy(false);
+
+    if (error) {
+      setNotice("That friend could not be removed. Please try again.");
+      return;
+    }
+
+    setFriends((current) =>
+      current.filter((friend) => friend.id !== person.id),
+    );
+    setPreviewProfile(null);
+    setNotice(`${person.display_name} has been unadded.`);
+  }
+
   async function answerRequest(
     request: FriendRequest,
     status: "accepted" | "declined" | "blocked",
@@ -3685,7 +3717,16 @@ export default function Home() {
               )}
               <div className="friend-profile-actions">
                 {friends.some((friend) => friend.id === previewProfile.id) ? (
-                  <button onClick={() => { const person = previewProfile; setPreviewProfile(null); void openChat(person); }}>Message</button>
+                  <>
+                    <button onClick={() => { const person = previewProfile; setPreviewProfile(null); void openChat(person); }}>Message</button>
+                    <button
+                      className="unadd-friend-button"
+                      disabled={busy}
+                      onClick={() => void unaddFriend(previewProfile)}
+                    >
+                      Unadd friend
+                    </button>
+                  </>
                 ) : (
                   <button
                     disabled={sentRequestIds.includes(previewProfile.id)}
