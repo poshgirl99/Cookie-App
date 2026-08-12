@@ -578,12 +578,14 @@ export default function Home() {
         return;
       }
       setBestFriends(
-        (data ?? []).map((row: Record<string, unknown>) => ({
-          ...row,
-          friend: (Array.isArray(row.friend)
-            ? row.friend[0]
-            : row.friend) as Profile,
-        })) as BestFriendRanking[],
+        (data ?? [])
+          .map((row: Record<string, unknown>) => ({
+            ...row,
+            friend: (Array.isArray(row.friend)
+              ? row.friend[0]
+              : row.friend) as Profile | undefined,
+          }))
+          .filter((row) => Boolean(row.friend)) as BestFriendRanking[],
       );
     },
     [supabase],
@@ -2502,11 +2504,13 @@ export default function Home() {
                       <i>🍪</i><i>✨</i><i>🩷</i><i>🤗</i>
                     </div>
                   </div>
-                  <div className="desktop-profile-figure">
-                    <Avatar person={profile!} />
-                    <b>{profile?.display_name}</b>
-                    <small>@{profile?.username}</small>
-                  </div>
+                  {profile && (
+                    <div className="desktop-profile-figure">
+                      <Avatar person={profile} />
+                      <b>{profile.display_name}</b>
+                      <small>@{profile.username}</small>
+                    </div>
+                  )}
                 </aside>
               </div>
             ))}
