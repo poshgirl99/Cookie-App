@@ -928,6 +928,28 @@ export default function Home() {
     const lockKey = `${table}:${post.id}:${user.id}`;
     if (crumbActionLocks.current.has(lockKey)) return;
     crumbActionLocks.current.add(lockKey);
+    const actionField = table === "crumb_likes"
+      ? "likes"
+      : table === "crumb_saves"
+        ? "saves"
+        : "reposts";
+    const applyOptimisticState = (shouldBeActive: boolean) => {
+      setCrumbs((current) =>
+        current.map((item) => {
+          if (item.id !== post.id) return item;
+          const existing = item[actionField].filter(
+            (entry) => entry.user_id !== user.id,
+          );
+          return {
+            ...item,
+            [actionField]: shouldBeActive
+              ? [...existing, { user_id: user.id }]
+              : existing,
+          };
+        }),
+      );
+    };
+    applyOptimisticState(!active);
     const request = active
       ? supabase
           .from(table)
@@ -943,11 +965,11 @@ export default function Home() {
     const { error } = await request;
     crumbActionLocks.current.delete(lockKey);
     if (error) {
+      applyOptimisticState(active);
       setNotice("That action couldn’t update. Please try once more.");
       return;
     }
-    await loadCrumbs(user.id, crumbFeed);
-    await loadBestFriends(user.id);
+    void loadBestFriends(user.id);
   }
 
   async function commentOnCrumb(post: CrumbPost) {
@@ -2821,6 +2843,9 @@ export default function Home() {
                           <div className="crumb-author">
                             <Avatar person={post.author} />
                             <span>
+                              {reposted && (
+                                <small className="crumb-reposted-label">↻ You reposted</small>
+                              )}
                               <b>@{post.author.username}</b>
                               <small>
                                 {formatAgo(post.created_at, now)} ago
