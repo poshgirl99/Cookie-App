@@ -45,6 +45,17 @@ type BestFriendRanking = {
   mutual_number_one_at: string | null;
   friend: Profile;
 };
+type StoryPost = {
+  id: string;
+  author_id: string;
+  media_path: string;
+  media_type: "image" | "video";
+  media_url: string;
+  caption: string;
+  created_at: string;
+  expires_at: string;
+  author: Profile;
+};
 type Reaction = { emoji: string; user_id: string };
 type ChatMessage = {
   id: string;
@@ -393,6 +404,9 @@ export default function Home() {
   const [sentRequestIds, setSentRequestIds] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [bestFriends, setBestFriends] = useState<BestFriendRanking[]>([]);
+  const [stories, setStories] = useState<StoryPost[]>([]);
+  const [activeStory, setActiveStory] = useState<StoryPost | null>(null);
+  const [storyCaption, setStoryCaption] = useState("");
   const [activeChat, setActiveChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hiddenMessageIds, setHiddenMessageIds] = useState<string[]>([]);
@@ -591,6 +605,41 @@ export default function Home() {
     [supabase],
   );
 
+  const loadStories = useCallback(
+    async (accountId: string) => {
+      const { data, error } = await supabase
+        .from("story_posts")
+        .select(
+          "id,author_id,media_path,media_type,caption,created_at,expires_at,author:profiles!story_posts_author_id_fkey(id,username,display_name,profile_colour,avatar_url,cover_url)",
+        )
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false });
+      if (error) {
+        setNotice(`Stories could not load: ${error.message}`);
+        return;
+      }
+      const hydrated = await Promise.all(
+        (data ?? []).map(async (row: Record<string, unknown>) => {
+          const author = (Array.isArray(row.author)
+            ? row.author[0]
+            : row.author) as Profile | undefined;
+          if (!author) return null;
+          const { data: signed } = await supabase.storage
+            .from("story-media")
+            .createSignedUrl(String(row.media_path), 3600);
+          if (!signed?.signedUrl) return null;
+          return {
+            ...row,
+            author,
+            media_url: signed.signedUrl,
+          } as StoryPost;
+        }),
+      );
+      setStories(hydrated.filter(Boolean) as StoryPost[]);
+    },
+    [supabase],
+  );
+
   const loadAccount = useCallback(
     async (account: User | null) => {
       setUser(account);
@@ -602,6 +651,8 @@ export default function Home() {
         setSentRequestIds([]);
         setConversations([]);
         setBestFriends([]);
+        setStories([]);
+        setActiveStory(null);
         setActiveChat(null);
         return;
       }
@@ -697,9 +748,10 @@ export default function Home() {
       );
       await loadConversations(account.id);
       await loadBestFriends(account.id);
+      await loadStories(account.id);
       await loadCrumbs(account.id);
     },
-    [loadBestFriends, loadConversations, loadCrumbs, supabase],
+    [loadBestFriends, loadConversations, loadCrumbs, loadStories, supabase],
   );
 
   useEffect(() => {
@@ -750,6 +802,41 @@ export default function Home() {
   async function switchCrumbFeed(feed: "for_you" | "following") {
     setCrumbFeed(feed);
     if (user) await loadCrumbs(user.id, feed);
+  }
+
+  async function publishStory(file: File | null) {
+    if (!user || !file) return;
+    const mediaType = file.type.startsWith("video/") ? "video" : "image";
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      setNotice("Choose a photo or video for your Story.");
+      return;
+    }
+    setBusy(true);
+    const extension = file.name.split(".").pop() || (mediaType === "video" ? "mp4" : "jpg");
+    const mediaPath = `${user.id}/story-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("story-media")
+      .upload(mediaPath, file, { contentType: file.type, upsert: false });
+    if (uploadError) {
+      setBusy(false);
+      setNotice(uploadError.message);
+      return;
+    }
+    const { error } = await supabase.from("story_posts").insert({
+      author_id: user.id,
+      media_path: mediaPath,
+      media_type: mediaType,
+      caption: storyCaption.trim(),
+    });
+    setBusy(false);
+    if (error) {
+      await supabase.storage.from("story-media").remove([mediaPath]);
+      setNotice(error.message);
+      return;
+    }
+    setStoryCaption("");
+    await loadStories(user.id);
+    setNotice("Your Story is live for 24 hours ✨");
   }
 
   async function publishCrumb() {
@@ -2311,33 +2398,25 @@ export default function Home() {
                 <div className="search-box">
                   ⌕ <input placeholder="Search messages, people and files" />
                 </div>
-                {bestFriends.length > 0 && (
-                  <div className="best-friends-strip" aria-label="Best Friends">
-                    {bestFriends.map((ranking) => {
-                      const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
-                      const mutual = Boolean(
-                        ranking.rank === 1 &&
-                          ranking.mutual_number_one_at &&
-                          new Date(ranking.mutual_number_one_at).getTime() <=
-                            twoWeeksAgo,
-                      );
-                      const numberOne = Boolean(
-                        ranking.rank === 1 &&
-                          ranking.first_number_one_at &&
-                          new Date(ranking.first_number_one_at).getTime() <=
-                            twoWeeksAgo,
-                      );
+                {stories.some((story) => story.author_id !== user.id) && (
+                  <div className="best-friends-strip" aria-label="Friends’ Stories">
+                    {Array.from(
+                      new Map(
+                        stories
+                          .filter((story) => story.author_id !== user.id)
+                          .map((story) => [story.author_id, story]),
+                      ).values(),
+                    ).map((story) => {
                       return (
                         <button
-                          key={ranking.friend_id}
-                          onClick={() => void openChat(ranking.friend)}
-                          title={`Message ${ranking.friend.display_name}`}
+                          key={story.author_id}
+                          onClick={() => setActiveStory(story)}
+                          title={`View ${story.author.display_name}’s Story`}
                         >
                           <span>
-                            <Avatar person={ranking.friend} />
-                            <i>{mutual ? "❤️" : numberOne ? "🩷" : "🤗"}</i>
+                            <Avatar person={story.author} />
                           </span>
-                          <small>{ranking.friend.display_name.split(" ")[0]}</small>
+                          <small>{story.author.display_name.split(" ")[0]}</small>
                         </button>
                       );
                     })}
@@ -2942,10 +3021,53 @@ export default function Home() {
             </div>
           )}
           {view === "stories" && (
-            <div className="coming">
-              <span>✨</span>
-              <h1>Stories</h1>
-              <p>Nothing here yet. Your friends’ stories will appear here.</p>
+            <div className="stories-page">
+              <div className="stories-head">
+                <div>
+                  <p className="kicker">Fresh from your circle</p>
+                  <h1>Stories</h1>
+                </div>
+                <label className="story-add">
+                  <span>＋</span>
+                  <small>{busy ? "Posting…" : "Add Story"}</small>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    disabled={busy}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      void publishStory(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <input
+                className="story-caption-input"
+                value={storyCaption}
+                onChange={(event) => setStoryCaption(event.target.value)}
+                placeholder="Optional caption for your next Story…"
+              />
+              {stories.length > 0 ? (
+                <div className="story-grid">
+                  {stories.map((story) => (
+                    <button key={story.id} onClick={() => setActiveStory(story)}>
+                      {story.media_type === "video" ? (
+                        <video src={story.media_url} muted preload="metadata" />
+                      ) : (
+                        <img src={story.media_url} alt="" />
+                      )}
+                      <span><Avatar person={story.author} /><b>{story.author.display_name}</b></span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="coming">
+                  <span>✨</span>
+                  <h1>No Stories yet</h1>
+                  <p>Friends’ Stories will appear here for 24 hours.</p>
+                </div>
+              )}
             </div>
           )}
           {view === "profile" && (
@@ -3066,6 +3188,21 @@ export default function Home() {
             </div>
           )}
         </section>
+        {activeStory && (
+          <div className="story-viewer" role="dialog" aria-modal="true">
+            <button className="story-close" onClick={() => setActiveStory(null)}>×</button>
+            <div className="story-viewer-head">
+              <Avatar person={activeStory.author} />
+              <span><b>{activeStory.author.display_name}</b><small>{formatAgo(activeStory.created_at, now)} ago</small></span>
+            </div>
+            {activeStory.media_type === "video" ? (
+              <video src={activeStory.media_url} autoPlay controls playsInline />
+            ) : (
+              <img src={activeStory.media_url} alt={`${activeStory.author.display_name}’s Story`} />
+            )}
+            {activeStory.caption && <p>{activeStory.caption}</p>}
+          </div>
+        )}
         <nav>
           {(
             [
