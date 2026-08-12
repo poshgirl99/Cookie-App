@@ -2508,25 +2508,25 @@ export default function Home() {
                           key={chat.id}
                           onClick={() => setActiveChat(chat)}
                         >
-                          <Avatar person={chat.person} />
+                          <span className="chat-avatar-wrap">
+                            <Avatar person={chat.person} />
+                            {bestFriendEmoji && (
+                              <span
+                                className="best-friend-emoji"
+                                title={
+                                  mutualForTwoWeeks
+                                    ? "You’ve been each other’s #1 Best Friend for two weeks"
+                                    : numberOneForTwoWeeks
+                                      ? `${chat.person.display_name} has been your #1 Best Friend for two weeks`
+                                      : "One of your six Best Friends"
+                                }
+                              >
+                                {bestFriendEmoji}
+                              </span>
+                            )}
+                          </span>
                           <span>
-                            <b>
-                              {chat.person.display_name}{" "}
-                              {bestFriendEmoji && (
-                                <span
-                                  className="best-friend-emoji"
-                                  title={
-                                    mutualForTwoWeeks
-                                      ? "You’ve been each other’s #1 Best Friend for two weeks"
-                                      : numberOneForTwoWeeks
-                                        ? `${chat.person.display_name} has been your #1 Best Friend for two weeks`
-                                        : "One of your six Best Friends"
-                                  }
-                                >
-                                  {bestFriendEmoji}
-                                </span>
-                              )}
-                            </b>
+                            <b>{chat.person.display_name}</b>
                             <small
                               className={chat.unread_count ? "new-chat" : ""}
                             >
