@@ -2826,11 +2826,6 @@ export default function Home() {
                               ♫ {post.audio_title}
                             </small>
                           )}
-                          {post.comments.slice(-2).map((comment) => (
-                            <small className="crumb-comment" key={comment.id}>
-                              <b>Comment</b> {comment.body}
-                            </small>
-                          ))}
                         </div>
                         <div className="crumb-actions">
                           <button
