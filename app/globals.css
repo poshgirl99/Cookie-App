@@ -515,6 +515,189 @@ button:disabled {
   color: white;
   border-color: var(--cocoa);
 }
+.chats-desktop-layout {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(350px, 410px) minmax(0, 1fr);
+  overflow: hidden;
+}
+.chat-sidebar.page {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  padding: 22px 16px 38px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: #fffdf9;
+}
+.chat-sidebar .title-row h1 {
+  margin-bottom: 12px;
+  font-size: 30px;
+}
+.chat-sidebar .round {
+  width: 42px;
+  height: 42px;
+}
+.chat-sidebar .crumb-legend {
+  margin-bottom: 12px;
+}
+.best-friends-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 16px 2px 12px;
+  scrollbar-width: none;
+}
+.best-friends-strip::-webkit-scrollbar {
+  display: none;
+}
+.best-friends-strip > button {
+  width: 58px;
+  flex: 0 0 58px;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.best-friends-strip > button > span {
+  position: relative;
+  display: block;
+  padding: 3px;
+  border: 2px solid #ef8f43;
+  border-radius: 50%;
+}
+.best-friends-strip .avatar {
+  width: 46px;
+  height: 46px;
+}
+.best-friends-strip i {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: white;
+  font-size: 12px;
+  font-style: normal;
+  box-shadow: 0 2px 8px #3a241c24;
+}
+.best-friends-strip small {
+  width: 100%;
+  overflow: hidden;
+  color: var(--cocoa);
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-chat-stage {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 76% 30%, #ffe7b6 0 12%, transparent 36%),
+    linear-gradient(145deg, #d99154 0%, #f6c779 42%, #a95c38 100%);
+  background-position: center;
+  background-size: cover;
+}
+.desktop-stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, #4325192e, transparent 48%, #4325191f),
+    linear-gradient(0deg, #5b2e1e40, transparent 46%);
+  backdrop-filter: saturate(0.85);
+}
+.camera-preview-card {
+  width: min(410px, 48vw);
+  min-height: 570px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 42px;
+  border: 18px solid #fce3bc99;
+  border-radius: 36px;
+  background: linear-gradient(180deg, #50392dd9, #2f211dde);
+  color: white;
+  text-align: center;
+  box-shadow: 0 28px 80px #44241459;
+  backdrop-filter: blur(12px);
+}
+.camera-orb {
+  width: 174px;
+  height: 174px;
+  display: grid;
+  place-items: center;
+  border: 4px solid #ffffff70;
+  border-radius: 50%;
+  background: #ffffff1f;
+  color: white;
+  box-shadow: inset 0 0 0 22px #ffffff0a;
+}
+.camera-orb span {
+  font-size: 72px;
+  filter: grayscale(1) brightness(4);
+}
+.camera-preview-card h2 {
+  margin: 32px 0 7px;
+  font-size: 26px;
+}
+.camera-preview-card p {
+  max-width: 260px;
+  margin: 0;
+  color: #f6e5d8;
+  line-height: 1.45;
+}
+.camera-effects {
+  display: flex;
+  gap: 12px;
+  margin-top: 34px;
+}
+.camera-effects i {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #ffffff8c;
+  border-radius: 50%;
+  background: #ffffff17;
+  font-size: 20px;
+  font-style: normal;
+}
+.desktop-profile-figure {
+  position: absolute;
+  right: clamp(24px, 7vw, 120px);
+  bottom: 12%;
+  display: grid;
+  justify-items: center;
+  color: white;
+  text-shadow: 0 2px 12px #382218;
+}
+.desktop-profile-figure .avatar {
+  width: 122px;
+  height: 122px;
+  margin-bottom: 10px;
+  border: 5px solid #fff5e2;
+  box-shadow: 0 18px 34px #44241459;
+  font-size: 42px;
+}
+.desktop-profile-figure b {
+  font-size: 18px;
+}
+.desktop-profile-figure small {
+  color: #fff7eb;
+}
 .request-banner {
   width: 100%;
   display: flex;
@@ -762,6 +945,25 @@ button:disabled {
   }
 }
 @media (max-width: 760px) {
+  .chats-desktop-layout {
+    height: auto;
+    min-height: 100%;
+    display: block;
+    overflow: visible;
+  }
+  .chat-sidebar.page {
+    height: auto;
+    min-height: 100%;
+    padding: 25px 18px 70px;
+    overflow: visible;
+    border-right: 0;
+  }
+  .chat-sidebar .title-row h1 {
+    font-size: 31px;
+  }
+  .desktop-chat-stage {
+    display: none;
+  }
   .auth-shell {
     display: block;
   }
