@@ -2303,19 +2303,33 @@ export default function Home() {
                   >
                     ‹
                   </button>
-                  <Avatar person={activeChat.person} />
-                  <div>
-                    <b>{activeChat.person.display_name}</b>
-                    <small className={peerActivity ? "live-activity" : ""}>
-                      {peerActivity === "recording"
-                        ? "recording audio…"
-                        : peerActivity === "typing"
-                          ? "typing…"
-                          : activeChat.kind === "group"
-                            ? "Group chat"
-                            : `@${activeChat.person.username}`}
-                    </small>
-                  </div>
+                  <button
+                    className="chat-profile-trigger"
+                    type="button"
+                    aria-label={
+                      activeChat.kind === "direct"
+                        ? `View ${activeChat.person.display_name}'s profile`
+                        : `${activeChat.person.display_name} group`
+                    }
+                    onClick={() => {
+                      if (activeChat.kind === "direct")
+                        setPreviewProfile(activeChat.person);
+                    }}
+                  >
+                    <Avatar person={activeChat.person} />
+                    <span>
+                      <b>{activeChat.person.display_name}</b>
+                      <small className={peerActivity ? "live-activity" : ""}>
+                        {peerActivity === "recording"
+                          ? "recording audio…"
+                          : peerActivity === "typing"
+                            ? "typing…"
+                            : activeChat.kind === "group"
+                              ? "Group chat"
+                              : `@${activeChat.person.username}`}
+                      </small>
+                    </span>
+                  </button>
                   <select
                     aria-label="Automatic message deletion"
                     value={activeChat.disappearing_mode}
