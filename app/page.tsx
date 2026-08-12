@@ -2285,7 +2285,8 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="page">
+              <div className="chats-desktop-layout">
+                <div className="page chat-sidebar">
                 <div className="title-row">
                   <div>
                     <p className="kicker">
@@ -2308,6 +2309,38 @@ export default function Home() {
                 <div className="search-box">
                   ⌕ <input placeholder="Search messages, people and files" />
                 </div>
+                {bestFriends.length > 0 && (
+                  <div className="best-friends-strip" aria-label="Best Friends">
+                    {bestFriends.map((ranking) => {
+                      const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
+                      const mutual = Boolean(
+                        ranking.rank === 1 &&
+                          ranking.mutual_number_one_at &&
+                          new Date(ranking.mutual_number_one_at).getTime() <=
+                            twoWeeksAgo,
+                      );
+                      const numberOne = Boolean(
+                        ranking.rank === 1 &&
+                          ranking.first_number_one_at &&
+                          new Date(ranking.first_number_one_at).getTime() <=
+                            twoWeeksAgo,
+                      );
+                      return (
+                        <button
+                          key={ranking.friend_id}
+                          onClick={() => void openChat(ranking.friend)}
+                          title={`Message ${ranking.friend.display_name}`}
+                        >
+                          <span>
+                            <Avatar person={ranking.friend} />
+                            <i>{mutual ? "❤️" : numberOne ? "🩷" : "🤗"}</i>
+                          </span>
+                          <small>{ranking.friend.display_name.split(" ")[0]}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="folder-row">
                   {(
                     [
@@ -2443,6 +2476,38 @@ export default function Home() {
                     }
                   />
                 )}
+                </div>
+                <aside
+                  className="desktop-chat-stage"
+                  style={
+                    profile?.cover_url
+                      ? { backgroundImage: `url(${profile.cover_url})` }
+                      : undefined
+                  }
+                >
+                  <div className="desktop-stage-overlay" />
+                  <div className="camera-preview-card">
+                    <button
+                      className="camera-orb"
+                      onClick={() =>
+                        setNotice("Cookie Camera is coming next 🍪")
+                      }
+                      aria-label="Open Cookie Camera"
+                    >
+                      <span>📷</span>
+                    </button>
+                    <h2>Capture a Cookie moment</h2>
+                    <p>Choose a chat or open the camera to share something.</p>
+                    <div className="camera-effects" aria-hidden="true">
+                      <i>🍪</i><i>✨</i><i>🩷</i><i>🤗</i>
+                    </div>
+                  </div>
+                  <div className="desktop-profile-figure">
+                    <Avatar person={profile!} />
+                    <b>{profile?.display_name}</b>
+                    <small>@{profile?.username}</small>
+                  </div>
+                </aside>
               </div>
             ))}
           {view === "friends" && (
