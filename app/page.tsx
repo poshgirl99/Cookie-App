@@ -31,6 +31,7 @@ type FriendRequest = {
 type Conversation = {
   id: string;
   kind: "direct" | "group";
+  name?: string | null;
   disappearing_mode: "after_viewing" | "24_hours" | "2_days" | "never";
   person: Profile;
   person_last_read_at?: string | null;
@@ -391,6 +392,10 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<AppView>("chats");
+  const [newChatMenuOpen, setNewChatMenuOpen] = useState(false);
+  const [groupComposerOpen, setGroupComposerOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const [chatFilter, setChatFilter] = useState<
     "all" | "unread" | "groups" | "best_friends" | "unreplied"
   >("all");
@@ -525,7 +530,7 @@ export default function Home() {
         await Promise.all([
           supabase
             .from("conversations")
-            .select("id,kind,disappearing_mode")
+            .select("id,kind,name,disappearing_mode")
             .in("id", ids),
           supabase
             .from("conversation_members")
@@ -547,9 +552,19 @@ export default function Home() {
             (item) => item.conversation_id === row.id,
           );
           const personValue = member?.profile;
-          const person = (
+          const directPerson = (
             Array.isArray(personValue) ? personValue[0] : personValue
           ) as Profile | undefined;
+          const person = row.kind === "group"
+            ? ({
+                id: row.id,
+                username: "group",
+                display_name: row.name || "Cookie Group",
+                profile_colour: "#e9a23b",
+                avatar_url: null,
+                cover_url: null,
+              } as Profile)
+            : directPerson;
           const last = (recent ?? []).find(
             (item) => item.conversation_id === row.id,
           );
@@ -566,6 +581,7 @@ export default function Home() {
             ? ({
                 id: row.id,
                 kind: row.kind,
+                name: row.name,
                 disappearing_mode: row.disappearing_mode,
                 person,
                 person_last_read_at: member?.last_read_at,
@@ -1572,6 +1588,60 @@ export default function Home() {
     return chat;
   }
 
+  async function createGroup() {
+    const cleanName = groupName.trim();
+    if (!user || !cleanName || groupMemberIds.length < 2) {
+      setNotice("Give the group a name and choose at least two friends.");
+      return;
+    }
+    setBusy(true);
+    setNotice("");
+    const { data: created, error } = await supabase
+      .from("conversations")
+      .insert({ created_by: user.id, kind: "group", name: cleanName })
+      .select("id,kind,name,disappearing_mode")
+      .single();
+    if (error || !created) {
+      setBusy(false);
+      setNotice(error?.message || "Group could not be created.");
+      return;
+    }
+    const { error: memberError } = await supabase
+      .from("conversation_members")
+      .insert([
+        { conversation_id: created.id, user_id: user.id },
+        ...groupMemberIds.map((memberId) => ({
+          conversation_id: created.id,
+          user_id: memberId,
+        })),
+      ]);
+    setBusy(false);
+    if (memberError) {
+      setNotice("The group was started, but its members could not be added. Please try again.");
+      return;
+    }
+    const groupPerson: Profile = {
+      id: created.id,
+      username: "group",
+      display_name: cleanName,
+      profile_colour: "#e9a23b",
+      avatar_url: null,
+      cover_url: null,
+    };
+    const chat: Conversation = {
+      ...created,
+      person: groupPerson,
+      unread_count: 0,
+    };
+    setConversations((current) => [chat, ...current]);
+    setGroupComposerOpen(false);
+    setNewChatMenuOpen(false);
+    setGroupName("");
+    setGroupMemberIds([]);
+    setActiveChat(chat);
+    setView("chats");
+  }
+
   async function replyToStory(quickReply?: string) {
     const reply = (quickReply ?? storyReply).trim();
     if (!activeStory || !user || !reply) return;
@@ -2205,7 +2275,9 @@ export default function Home() {
                         ? "recording audio…"
                         : peerActivity === "typing"
                           ? "typing…"
-                          : `@${activeChat.person.username}`}
+                          : activeChat.kind === "group"
+                            ? "Group chat"
+                            : `@${activeChat.person.username}`}
                     </small>
                   </div>
                   <select
@@ -2631,9 +2703,25 @@ export default function Home() {
                     </p>
                     <h1>Chat Jar</h1>
                   </div>
-                  <button className="round" onClick={() => setView("friends")}>
-                    ＋
-                  </button>
+                  <div className="new-chat-control">
+                    <button
+                      className="round"
+                      aria-expanded={newChatMenuOpen}
+                      onClick={() => setNewChatMenuOpen((open) => !open)}
+                    >
+                      ＋
+                    </button>
+                    {newChatMenuOpen && (
+                      <div className="new-chat-menu">
+                        <button onClick={() => { setNewChatMenuOpen(false); setView("friends"); }}>
+                          <span>💬</span><div><b>Private chat</b><small>Message one friend</small></div>
+                        </button>
+                        <button onClick={() => { setNewChatMenuOpen(false); setGroupComposerOpen(true); }}>
+                          <span>👥</span><div><b>Create group</b><small>Chat with friends together</small></div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="crumb-legend">
                   <CrumbStatus />
@@ -3584,6 +3672,62 @@ export default function Home() {
             </div>
           )}
         </section>
+        {groupComposerOpen && (
+          <div className="group-modal" role="dialog" aria-modal="true" aria-labelledby="group-title">
+            <form
+              className="group-composer"
+              onSubmit={(event) => { event.preventDefault(); void createGroup(); }}
+            >
+              <button
+                type="button"
+                className="group-close"
+                aria-label="Close"
+                onClick={() => setGroupComposerOpen(false)}
+              >×</button>
+              <p className="kicker">New Cookie circle</p>
+              <h2 id="group-title">Create a group</h2>
+              <label>
+                Group name
+                <input
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                  placeholder="e.g. Study Crew"
+                  maxLength={60}
+                  autoFocus
+                />
+              </label>
+              <div className="group-friend-list">
+                <b>Choose at least two friends</b>
+                {friends.length ? friends.map((friend) => {
+                  const selected = groupMemberIds.includes(friend.id);
+                  return (
+                    <button
+                      type="button"
+                      key={friend.id}
+                      className={selected ? "selected" : ""}
+                      onClick={() => setGroupMemberIds((current) =>
+                        selected
+                          ? current.filter((id) => id !== friend.id)
+                          : [...current, friend.id],
+                      )}
+                    >
+                      <Avatar person={friend} />
+                      <span><b>{friend.display_name}</b><small>@{friend.username}</small></span>
+                      <i>{selected ? "✓" : ""}</i>
+                    </button>
+                  );
+                }) : <p>Add friends before creating a group.</p>}
+              </div>
+              {notice && <p className="notice inline">{notice}</p>}
+              <button
+                className="primary group-create-button"
+                disabled={busy || !groupName.trim() || groupMemberIds.length < 2}
+              >
+                {busy ? "Creating…" : `Create group${groupMemberIds.length ? ` · ${groupMemberIds.length + 1} people` : ""}`}
+              </button>
+            </form>
+          </div>
+        )}
         {activeStory && (
           <div className="story-viewer" role="dialog" aria-modal="true">
             <div
