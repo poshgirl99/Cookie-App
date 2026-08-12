@@ -30,6 +30,7 @@ type FriendRequest = {
 };
 type Conversation = {
   id: string;
+  kind: "direct" | "group";
   disappearing_mode: "after_viewing" | "24_hours" | "2_days" | "never";
   person: Profile;
   person_last_read_at?: string | null;
@@ -372,6 +373,9 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<AppView>("chats");
+  const [chatFilter, setChatFilter] = useState<
+    "all" | "unread" | "groups" | "best_friends" | "unreplied"
+  >("all");
   const [search, setSearch] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
@@ -419,6 +423,7 @@ export default function Home() {
   const peerActivityTimer = useRef<number | null>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   const loadCrumbs = useCallback(
     async (accountId: string, feed: "for_you" | "following" = crumbFeed) => {
@@ -484,7 +489,7 @@ export default function Home() {
         await Promise.all([
           supabase
             .from("conversations")
-            .select("id,disappearing_mode")
+            .select("id,kind,disappearing_mode")
             .in("id", ids),
           supabase
             .from("conversation_members")
@@ -524,6 +529,7 @@ export default function Home() {
           return person
             ? ({
                 id: row.id,
+                kind: row.kind,
                 disappearing_mode: row.disappearing_mode,
                 person,
                 person_last_read_at: member?.last_read_at,
@@ -984,6 +990,13 @@ export default function Home() {
   }, [activeChat, loadMessages, supabase, user]);
 
   useEffect(() => {
+    if (!activeChat) return;
+    window.requestAnimationFrame(() =>
+      messageEndRef.current?.scrollIntoView({ block: "end" }),
+    );
+  }, [activeChat, messages.length]);
+
+  useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`cookie-chat-list-${user.id}`)
@@ -1308,7 +1321,7 @@ export default function Home() {
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({ created_by: user.id })
-      .select("id,disappearing_mode")
+      .select("id,kind,disappearing_mode")
       .single();
     if (error || !created) {
       setBusy(false);
@@ -1809,6 +1822,35 @@ export default function Home() {
       </main>
     );
 
+  const visibleConversations = conversations.filter((chat) => {
+    if (chatFilter === "unread")
+      return chat.last_sender_id !== user.id && chat.unread_count > 0;
+    if (chatFilter === "groups") return chat.kind === "group";
+    if (chatFilter === "best_friends") return false;
+    if (chatFilter === "unreplied")
+      return Boolean(chat.last_message_at) &&
+        chat.last_sender_id !== user.id &&
+        chat.unread_count === 0;
+    return true;
+  });
+
+  const emptyFilterCopy = {
+    all: [
+      "No conversations yet",
+      "Add friends to start chatting. Your real conversations will appear here.",
+    ],
+    unread: ["No unread chats", "New chats you have not opened will appear here."],
+    groups: ["No groups yet", "Groups you join will appear here."],
+    best_friends: [
+      "Best Friends is coming next",
+      "We’ll build this part together soon.",
+    ],
+    unreplied: [
+      "You’re all caught up",
+      "Opened chats waiting for your reply will appear here.",
+    ],
+  }[chatFilter];
+
   return (
     <main className="app-shell">
       <div className="app-frame">
@@ -2014,12 +2056,6 @@ export default function Home() {
                                           message.created_at,
                                     )}
                                   />
-                                ) : messages.some(
-                                    (later) =>
-                                      later.sender_id === user.id &&
-                                      later.created_at > message.created_at,
-                                  ) ? (
-                                  "Delivered"
                                 ) : (
                                   "Received"
                                 )}
@@ -2092,6 +2128,7 @@ export default function Home() {
                         </div>
                       );
                     })}
+                  <div ref={messageEndRef} aria-hidden="true" />
                 </div>
                 <div className="chat-compose">
                   {replyingTo && (
@@ -2221,11 +2258,23 @@ export default function Home() {
                   ⌕ <input placeholder="Search messages, people and files" />
                 </div>
                 <div className="folder-row">
-                  <button className="active">All</button>
-                  <button>Unread</button>
-                  <button>Groups</button>
-                  <button>Best Friends</button>
-                  <button>Unreplied</button>
+                  {(
+                    [
+                      ["all", "All"],
+                      ["unread", "Unread"],
+                      ["groups", "Groups"],
+                      ["best_friends", "Best Friends"],
+                      ["unreplied", "Unreplied"],
+                    ] as const
+                  ).map(([filter, label]) => (
+                    <button
+                      key={filter}
+                      className={chatFilter === filter ? "active" : ""}
+                      onClick={() => setChatFilter(filter)}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
                 {requests.length > 0 && (
                   <button
@@ -2241,9 +2290,9 @@ export default function Home() {
                     <i>›</i>
                   </button>
                 )}
-                {conversations.length > 0 ? (
+                {visibleConversations.length > 0 ? (
                   <div className="chat-list">
-                    {conversations.map((chat) => {
+                    {visibleConversations.map((chat) => {
                       const read = Boolean(
                         chat.last_message_at &&
                           chat.person_last_read_at &&
@@ -2291,10 +2340,12 @@ export default function Home() {
                   </div>
                 ) : (
                   <EmptyState
-                    title="No conversations yet"
-                    copy="Add friends to start chatting. Your real conversations will appear here."
-                    action="Find friends"
-                    onAction={() => setView("friends")}
+                    title={emptyFilterCopy[0]}
+                    copy={emptyFilterCopy[1]}
+                    action={chatFilter === "all" ? "Find friends" : undefined}
+                    onAction={
+                      chatFilter === "all" ? () => setView("friends") : undefined
+                    }
                   />
                 )}
               </div>
