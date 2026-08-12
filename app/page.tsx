@@ -2542,7 +2542,6 @@ export default function Home() {
                               </small>
                             )}
                           </span>
-                          <i className="chat-open-label">Open</i>
                         </button>
                       );
                     })}
@@ -2558,16 +2557,9 @@ export default function Home() {
                   />
                 )}
                 </div>
-                <aside
-                  className="desktop-chat-stage"
-                >
+                <aside className="desktop-chat-stage">
                   <div className="cookie-workspace-glow" />
-                  <header className="cookie-workspace-head">
-                    <div>
-                      <p className="kicker">Your cookie counter</p>
-                      <h2>Good to see you{profile ? `, ${profile.display_name.split(" ")[0]}` : ""}.</h2>
-                      <p>Pick up a conversation or start a fresh one.</p>
-                    </div>
+                  <section className="simple-chat-welcome">
                     {profile && (
                       <button
                         className="workspace-profile-chip"
@@ -2581,40 +2573,11 @@ export default function Home() {
                         </span>
                       </button>
                     )}
-                  </header>
-
-                  <div className="cookie-workspace-grid">
-                    <section className="workspace-welcome-card">
-                      <span className="workspace-cookie-mark">🍪</span>
-                      <div>
-                        <p className="kicker">Fresh conversations</p>
-                        <h3>Who are you checking in on today?</h3>
-                        <p>Messages stay tucked away until you open a chat.</p>
-                      </div>
-                      <button onClick={() => setView("friends")}>Start a chat <span>＋</span></button>
-                    </section>
-
-                    <section className="workspace-stat-card">
-                      <span>Unread</span>
-                      <strong>{conversations.reduce((total, chat) => total + chat.unread_count, 0)}</strong>
-                      <small>new {conversations.reduce((total, chat) => total + chat.unread_count, 0) === 1 ? "chat" : "chats"}</small>
-                    </section>
-
-                    <section className="workspace-stat-card warm">
-                      <span>Your circle</span>
-                      <strong>{friends.length}</strong>
-                      <small>{friends.length === 1 ? "friend" : "friends"} on Cookie</small>
-                    </section>
-
-                    <section className="workspace-tip-card">
-                      <span className="tip-icon">✦</span>
-                      <div>
-                        <b>Cookie tip</b>
-                        <p>Use Best Friends to keep your closest six people within easy reach.</p>
-                      </div>
-                      <button onClick={() => setChatFilter("best_friends")}>View</button>
-                    </section>
-                  </div>
+                    <span className="simple-cookie-icon">🍪</span>
+                    <h2>Your conversations live here.</h2>
+                    <p>Select a chat from the left, or begin a new one.</p>
+                    <button className="simple-start-chat" onClick={() => setView("friends")}>＋ Start a chat</button>
+                  </section>
                 </aside>
               </div>
             ))}
