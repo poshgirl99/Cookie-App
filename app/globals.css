@@ -2000,8 +2000,29 @@ button:disabled {
   top: 0;
   z-index: 6;
 }
-.chat-head > div {
+.chat-profile-trigger {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  padding: 3px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-profile-trigger:hover {
+  background: #f8ecd9;
+}
+.chat-profile-trigger:active {
+  transform: scale(.985);
+}
+.chat-profile-trigger > span:not(.avatar) {
   display: grid;
+  min-width: 0;
   flex: 1;
 }
 .chat-head small {
@@ -2528,20 +2549,21 @@ button:disabled {
     width: 100%;
     min-width: 0;
     display: grid;
-    grid-template-columns: 38px 44px minmax(0, 1fr) auto;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
     gap: 8px;
     padding: 8px 9px;
   }
-  .chat-head > .avatar {
+  .chat-profile-trigger > .avatar {
     width: 44px;
     height: 44px;
+    flex: 0 0 44px;
   }
-  .chat-head > div {
+  .chat-profile-trigger {
     min-width: 0;
     overflow: hidden;
   }
-  .chat-head > div b,
-  .chat-head > div small {
+  .chat-profile-trigger b,
+  .chat-profile-trigger small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2602,13 +2624,14 @@ button:disabled {
 
 @media (max-width: 380px) {
   .chat-head {
-    grid-template-columns: 34px 40px minmax(0, 1fr) 92px;
+    grid-template-columns: 34px minmax(0, 1fr) 92px;
     gap: 6px;
     padding-inline: 6px;
   }
-  .chat-head > .avatar {
+  .chat-profile-trigger > .avatar {
     width: 40px;
     height: 40px;
+    flex-basis: 40px;
   }
   .chat-head select {
     width: 92px;
