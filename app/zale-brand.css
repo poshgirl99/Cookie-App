@@ -85,3 +85,32 @@
 }
 .zale-orbit::after { content: "✦"; position: absolute; right: -7px; top: -8px; color: var(--zale-violet); font-size: 13px; }
 .zale-vibe-chip { border: 1px solid rgba(109,54,200,.16); background: rgba(203,184,255,.22); color: var(--zale-ink); border-radius: 999px; padding: 8px 12px; font-weight: 800; }
+
+/* Replace the old diamond notification control with a stable Faith Space shortcut. */
+.zale-brand .app-frame > header > div > button[aria-label="Notifications"] { display: none !important; }
+.faith-header-link {
+  display: none;
+  position: fixed;
+  top: 9px;
+  right: 82px;
+  z-index: 1200;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #f3edff, #dfd2ff);
+  border: 1px solid #d9cdf8;
+  color: #5d35bd;
+  font-size: 23px;
+  line-height: 1;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 5px 18px rgba(93,53,189,.12);
+  touch-action: manipulation;
+}
+body:has(.app-frame) .faith-header-link { display: grid; }
+.faith-header-link:hover { background: #eee7ff; transform: translateY(-1px); }
+.faith-header-link:active { transform: translateY(0); }
+@media (max-width: 760px) {
+  .faith-header-link { right: 68px; top: 8px; width: 40px; height: 40px; font-size: 21px; }
+}
