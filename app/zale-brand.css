@@ -7,11 +7,68 @@
   --zale-white: #ffffff;
 }
 
-/* Zale brand foundation: cool, effortless, social and youthful. */
 .zale-brand {
+  --cream: #fbf7ef;
+  --cream2: #f0e9f7;
+  --cocoa: #24112f;
+  --muted: #75677e;
+  --caramel: #6d36c8;
+  --orange: #8b5cf6;
+  --line: #e5dcef;
+  --white: #ffffff;
   color: var(--zale-ink);
   background: var(--zale-cream);
 }
+
+.zale-brand .splash {
+  background: radial-gradient(circle at 50% 42%, #ffffff 0 12%, #e8dcff 38%, #8b5cf6 72%, #24112f 125%);
+}
+.zale-brand .splash p { color: #493657; }
+.zale-brand .progress { background: rgba(255,255,255,.35); }
+.zale-brand .progress i { background: #ffffff; }
+.zale-brand .falling-crumbs { display: none; }
+
+.zale-brand .auth-art {
+  background: radial-gradient(circle at 50% 35%, #fdfaff, #dfd0ff 48%, #8b5cf6 100%);
+}
+.zale-brand .auth-art > p:last-child { color: #493657; }
+.zale-brand .kicker { color: #6d36c8; }
+.zale-brand .primary { background: #6d36c8; color: #fff; }
+.zale-brand .choices button.selected,
+.zale-brand .interest-list button.selected { border-color: #6d36c8; background: #eee6ff; }
+.zale-brand header,
+.zale-brand .bottom-nav { background: rgba(255,255,255,.92); border-color: #e5dcef; }
+.zale-brand .brand b { color: #24112f; }
+.zale-brand .chat-pane,
+.zale-brand .profile-page,
+.zale-brand .friends-page { background: #fbf7ef; }
+
+.zale-brand .cookie-logo {
+  border-radius: 18px;
+  background: linear-gradient(145deg, #8b5cf6, #5c2da8);
+  color: white;
+  box-shadow: 0 12px 32px rgba(109,54,200,.25);
+  overflow: hidden;
+}
+.zale-brand .cookie-logo img { display: none; }
+.zale-brand .cookie-logo::before {
+  content: "Z";
+  font-size: 0.58em;
+  font-size: clamp(30px, 8vw, 92px);
+  line-height: 1;
+  font-weight: 900;
+  font-family: "Segoe UI", sans-serif;
+  transform: rotate(-5deg);
+}
+.zale-brand .cookie-logo.small::before { font-size: 29px; }
+.zale-brand .cookie-logo::after {
+  content: "✦";
+  position: absolute;
+  margin: -68% -78% 0 0;
+  font-size: 16px;
+  color: #f7f0ff;
+}
+.zale-brand .cookie-logo { position: relative; }
 
 .zale-orbit {
   position: relative;
@@ -24,23 +81,7 @@
   color: white;
   font-weight: 900;
   font-size: 25px;
-  box-shadow: 0 10px 30px rgba(109, 54, 200, .22);
+  box-shadow: 0 10px 30px rgba(109,54,200,.22);
 }
-
-.zale-orbit::after {
-  content: "✦";
-  position: absolute;
-  right: -7px;
-  top: -8px;
-  color: var(--zale-violet);
-  font-size: 13px;
-}
-
-.zale-vibe-chip {
-  border: 1px solid rgba(109, 54, 200, .16);
-  background: rgba(203, 184, 255, .22);
-  color: var(--zale-ink);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-weight: 800;
-}
+.zale-orbit::after { content: "✦"; position: absolute; right: -7px; top: -8px; color: var(--zale-violet); font-size: 13px; }
+.zale-vibe-chip { border: 1px solid rgba(109,54,200,.16); background: rgba(203,184,255,.22); color: var(--zale-ink); border-radius: 999px; padding: 8px 12px; font-weight: 800; }
