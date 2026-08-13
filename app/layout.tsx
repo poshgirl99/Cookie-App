@@ -3,6 +3,7 @@ import "./globals.css";
 import "./zale-brand.css";
 import StorySentFeedback from "./story-sent-feedback";
 import InstantDeleteFeedback from "./instant-delete-feedback";
+import ZaleRebrand from "./zale-rebrand";
 
 export const metadata: Metadata = {
   title: "Zale",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
+        <ZaleRebrand />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
