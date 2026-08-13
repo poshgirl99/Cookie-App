@@ -5,10 +5,6 @@ import "./zale-logo-override.css";
 import StorySentFeedback from "./story-sent-feedback";
 import InstantDeleteFeedback from "./instant-delete-feedback";
 import ZaleRebrand from "./zale-rebrand";
-import ChatThemeControl from "./chat-theme-control";
-import NewChatProminence from "./new-chat-prominence";
-import ZaleChatHeaderControls from "./zale-chat-header-controls";
-import ZaleProfileSummary from "./zale-profile-summary";
 
 export const metadata: Metadata = { title: "Zale", description: "Your people. Your space." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#24112f" };
@@ -19,10 +15,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <ZaleRebrand />
-        <ChatThemeControl />
-        <ZaleChatHeaderControls />
-        <ZaleProfileSummary />
-        <NewChatProminence />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
