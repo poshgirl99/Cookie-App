@@ -8,12 +8,7 @@ export default function InstantDeleteFeedback() {
     const originalConfirm = window.confirm.bind(window);
 
     const hideForMe = (row: HTMLElement) => {
-      row.style.transition = "opacity 120ms ease, transform 120ms ease";
-      row.style.opacity = "0";
-      row.style.transform = "scale(.98)";
-      window.setTimeout(() => {
-        if (document.body.contains(row)) row.style.display = "none";
-      }, 120);
+      row.style.display = "none";
     };
 
     const showDeletedForEveryone = (row: HTMLElement) => {
@@ -32,6 +27,24 @@ export default function InstantDeleteFeedback() {
         .forEach((node) => node.remove());
     };
 
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button");
+      if (!button) return;
+
+      const label = button.textContent?.trim().toLowerCase();
+      if (label !== "delete for me" && label !== "delete for everyone") return;
+
+      const row = button.closest(".message-row") as HTMLElement | null;
+      if (!row) return;
+
+      if (label === "delete for me") {
+        hideForMe(row);
+      } else {
+        pendingDeleteForEveryoneRow = row;
+      }
+    };
+
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       const button = target?.closest("button");
@@ -45,10 +58,9 @@ export default function InstantDeleteFeedback() {
 
       if (label === "delete for me") {
         hideForMe(row);
-        return;
+      } else {
+        pendingDeleteForEveryoneRow = row;
       }
-
-      pendingDeleteForEveryoneRow = row;
     };
 
     window.confirm = (message?: string) => {
@@ -64,8 +76,10 @@ export default function InstantDeleteFeedback() {
       return confirmed;
     };
 
+    document.addEventListener("pointerdown", handlePointerDown, true);
     document.addEventListener("click", handleClick, true);
     return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("click", handleClick, true);
       window.confirm = originalConfirm;
     };
