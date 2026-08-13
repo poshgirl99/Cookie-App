@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./zale-brand.css";
+import "./zale-logo-override.css";
 import StorySentFeedback from "./story-sent-feedback";
 import InstantDeleteFeedback from "./instant-delete-feedback";
 import ZaleRebrand from "./zale-rebrand";
+import ChatThemeControl from "./chat-theme-control";
 
 export const metadata: Metadata = {
   title: "Zale",
@@ -23,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <ZaleRebrand />
+        <ChatThemeControl />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
