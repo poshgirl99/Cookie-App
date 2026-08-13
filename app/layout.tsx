@@ -7,18 +7,10 @@ import InstantDeleteFeedback from "./instant-delete-feedback";
 import ZaleRebrand from "./zale-rebrand";
 import ChatThemeControl from "./chat-theme-control";
 import NewChatProminence from "./new-chat-prominence";
+import ZaleChatHeaderControls from "./zale-chat-header-controls";
 
-export const metadata: Metadata = {
-  title: "Zale",
-  description: "Your people. Your space.",
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: "#24112f",
-};
+export const metadata: Metadata = { title: "Zale", description: "Your people. Your space." };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#24112f" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -27,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <ZaleRebrand />
         <ChatThemeControl />
+        <ZaleChatHeaderControls />
         <NewChatProminence />
         <StorySentFeedback />
         <InstantDeleteFeedback />
