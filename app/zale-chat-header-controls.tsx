@@ -1,0 +1,23 @@
+"use client";
+import { useEffect, useState } from "react";
+
+export default function ZaleChatHeaderControls(){
+  const [open,setOpen]=useState(false);
+  const [note,setNote]=useState("");
+  useEffect(()=>{
+    const style=document.createElement("style");style.textContent=`.zale-header-tools{margin-left:auto;display:flex;gap:7px;align-items:center;position:relative;z-index:100}.zale-header-tools button{width:38px;height:38px;min-height:38px;border:1px solid #e1daf2;border-radius:999px;background:#fff;color:#4f2aaf;font-weight:900;display:grid;place-items:center}.zale-header-tools button:hover{background:#f3efff}.zale-header-menu{position:fixed;right:18px;top:74px;width:190px;background:#fff;border:1px solid #e3dcf2;border-radius:16px;padding:7px;box-shadow:0 20px 55px #1e103a2b;z-index:99999;display:grid}.zale-header-menu button{border:0;background:transparent;text-align:left;padding:11px 12px;border-radius:10px;font-weight:800;color:#241443}.zale-header-menu button:hover{background:#f2edff}.zale-header-menu .danger{color:#a62a40}.zale-header-note{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:99999;background:#25133f;color:#fff;padding:10px 16px;border-radius:999px;font-weight:800}@media(max-width:760px){.zale-header-tools{gap:4px}.zale-header-tools button{width:35px;height:35px;min-height:35px}.zale-header-menu{right:10px;top:64px}}`;
+    document.head.appendChild(style);return()=>style.remove();
+  },[]);
+  useEffect(()=>{
+    const inject=()=>{const head=document.querySelector(".chat-head");if(!head||head.querySelector(".zale-header-tools"))return;const slot=document.createElement("div");slot.className="zale-header-tools";slot.id="zale-header-tools";head.appendChild(slot)};
+    inject();const o=new MutationObserver(inject);o.observe(document.body,{childList:true,subtree:true});return()=>o.disconnect();
+  },[]);
+  useEffect(()=>{
+    const render=()=>{const slot=document.querySelector("#zale-header-tools");if(!slot)return;slot.innerHTML="";const v=document.createElement("button");v.title="Video call";v.textContent="▣";v.onclick=()=>{setNote("Video calling is coming to Zale.");setTimeout(()=>setNote(""),1800)};const p=document.createElement("button");p.title="Voice call";p.textContent="☎";p.onclick=()=>{setNote("Voice calling is coming to Zale.");setTimeout(()=>setNote(""),1800)};const m=document.createElement("button");m.title="Chat options";m.textContent="•••";m.onclick=()=>setOpen(x=>!x);slot.append(v,p,m)};
+    render();const o=new MutationObserver(render);o.observe(document.body,{childList:true,subtree:true});return()=>o.disconnect();
+  },[]);
+  const theme=()=>{document.querySelector<HTMLElement>("[data-zale-theme-trigger]")?.click();setOpen(false)};
+  const unadd=()=>{setOpen(false);(document.querySelector(".chat-profile-trigger") as HTMLElement|null)?.click();setTimeout(()=>{(document.querySelector(".unadd-friend-button") as HTMLElement|null)?.click()},180)};
+  const block=()=>{setOpen(false);setNote("Block Friend is being connected to Zale.");setTimeout(()=>setNote(""),1800)};
+  return <>{open&&<div className="zale-header-menu"><button onClick={theme}>Theme</button><button className="danger" onClick={block}>Block friend</button><button className="danger" onClick={unadd}>Unadd friend</button></div>}{note&&<div className="zale-header-note">{note}</div>}</>;
+}
