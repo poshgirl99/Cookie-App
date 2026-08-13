@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import StorySentFeedback from "./story-sent-feedback";
 
 export const metadata: Metadata = {
   title: "Cookie",
@@ -14,5 +15,12 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <StorySentFeedback />
+      </body>
+    </html>
+  );
 }
