@@ -29,20 +29,26 @@ const replacements: Array<[RegExp, string]> = [
   [/Pick your flavour/g, "Your vibe"],
   [/Choose your Cookie colour/g, "Personalise your space"],
   [/Last crumb/g, "Almost there"],
+  [/Cookie/g, "Zale"],
+  [/cookie/g, "Zale"],
 ];
 
 function replaceText(root: Node) {
+  if (root.nodeType === Node.TEXT_NODE) {
+    const textNode = root as Text;
+    const parent = textNode.parentElement;
+    if (!parent || parent.closest("script,style")) return;
+    let value = textNode.nodeValue || "";
+    for (const [pattern, replacement] of replacements) value = value.replace(pattern, replacement);
+    if (value !== textNode.nodeValue) textNode.nodeValue = value;
+    return;
+  }
+
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   let node: Node | null;
   while ((node = walker.nextNode())) nodes.push(node as Text);
-  for (const textNode of nodes) {
-    const parent = textNode.parentElement;
-    if (!parent || parent.closest("script,style")) continue;
-    let value = textNode.nodeValue || "";
-    for (const [pattern, replacement] of replacements) value = value.replace(pattern, replacement);
-    if (value !== textNode.nodeValue) textNode.nodeValue = value;
-  }
+  for (const textNode of nodes) replaceText(textNode);
 }
 
 export default function ZaleRebrand() {
@@ -52,10 +58,11 @@ export default function ZaleRebrand() {
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
+        if (mutation.type === "characterData") replaceText(mutation.target);
         mutation.addedNodes.forEach((node) => replaceText(node));
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
   }, []);
   return null;
