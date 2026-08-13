@@ -1,0 +1,46 @@
+:root {
+  --zale-ink: #24112f;
+  --zale-purple: #6d36c8;
+  --zale-violet: #8b5cf6;
+  --zale-lavender: #cbb8ff;
+  --zale-cream: #fbf7ef;
+  --zale-white: #ffffff;
+}
+
+/* Zale brand foundation: cool, effortless, social and youthful. */
+.zale-brand {
+  color: var(--zale-ink);
+  background: var(--zale-cream);
+}
+
+.zale-orbit {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, var(--zale-violet), var(--zale-purple));
+  color: white;
+  font-weight: 900;
+  font-size: 25px;
+  box-shadow: 0 10px 30px rgba(109, 54, 200, .22);
+}
+
+.zale-orbit::after {
+  content: "✦";
+  position: absolute;
+  right: -7px;
+  top: -8px;
+  color: var(--zale-violet);
+  font-size: 13px;
+}
+
+.zale-vibe-chip {
+  border: 1px solid rgba(109, 54, 200, .16);
+  background: rgba(203, 184, 255, .22);
+  color: var(--zale-ink);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+}
