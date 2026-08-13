@@ -6,6 +6,7 @@ import StorySentFeedback from "./story-sent-feedback";
 import InstantDeleteFeedback from "./instant-delete-feedback";
 import ZaleRebrand from "./zale-rebrand";
 import ChatThemeControl from "./chat-theme-control";
+import NewChatProminence from "./new-chat-prominence";
 
 export const metadata: Metadata = {
   title: "Zale",
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <ZaleRebrand />
         <ChatThemeControl />
+        <NewChatProminence />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
