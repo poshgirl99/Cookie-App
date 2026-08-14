@@ -7,6 +7,7 @@ import InstantDeleteFeedback from "./instant-delete-feedback";
 import ZaleRebrand from "./zale-rebrand";
 import FaithHeaderLink from "./faith-header-link";
 import ZaleSocialEnhancements from "./zale-social-enhancements";
+import ZalePushNotifications from "./zale-push-notifications";
 
 export const metadata: Metadata = { title: "Zale", description: "Your people. Your space." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#24112f" };
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <FaithHeaderLink />
         <ZaleRebrand />
         <ZaleSocialEnhancements />
+        <ZalePushNotifications />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
