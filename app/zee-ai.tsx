@@ -9,6 +9,7 @@ declare global { interface Window { SpeechRecognition?: SpeechRecognitionCtor; w
 
 const START: ZeeMessage[] = [{ role: "zee", text: "Hey 👋 I’m Zee. I’m your AI inside Zale. What should I call you?" }];
 const voices = ["Warm", "Bright", "Calm", "Deep"];
+const wait = (ms:number) => new Promise(resolve => window.setTimeout(resolve, ms));
 
 export default function ZeeAI() {
   const [open, setOpen] = useState(false), [expanded, setExpanded] = useState(false), [listening, setListening] = useState(false), [thinking, setThinking] = useState(false);
@@ -25,16 +26,25 @@ export default function ZeeAI() {
   useEffect(() => { localStorage.setItem("zale-zee-messages", JSON.stringify(messages)); }, [messages]);
   useEffect(() => { localStorage.setItem("zale-zee-prefs", JSON.stringify(prefs)); }, [prefs]);
 
+  async function replyNaturally(text:string, delay=1100){ setThinking(true); await wait(delay); setMessages((m)=>[...m,{role:"zee",text}]); setThinking(false); }
+
   async function ask(text: string) {
     const clean = text.trim(); if (!clean || thinking) return;
     localStorage.setItem("zale-zee-last-active", String(Date.now()));
     setMessages((m) => [...m, { role: "user", text: clean }]); setInput("");
-    if (!prefs.name) { setPrefs((p) => ({ ...p, name: clean })); setMessages((m) => [...m, { role: "zee", text: `Nice to meet you, ${clean}. Pick the voice you want me to use.` }]); return; }
-    if (!prefs.voice) { const match = voices.find((v) => v.toLowerCase() === clean.toLowerCase()) || clean; setPrefs((p) => ({ ...p, voice: match })); setMessages((m) => [...m, { role: "zee", text: "Perfect. Last setup bit: choose what I’m allowed to understand inside Zale. You can change this later." }]); return; }
-    if (!prefs.permissions) { const allowAll = /all|everything|yes|allow/i.test(clean); setPrefs((p) => ({ ...p, permissions: { chats: allowAll, friends: true, stories: allowAll, media: allowAll, activity: true }, onboarded: true })); setMessages((m) => [...m, { role: "zee", text: "Done. I’ll only use the access you’ve allowed, and I’ll still confirm important actions before doing them. What do you want to do?" }]); return; }
+    if (!prefs.name) { setPrefs((p) => ({ ...p, name: clean })); await replyNaturally(`Nice to meet you, ${clean}. Pick the voice you want me to use.`, 1200); return; }
+    if (!prefs.voice) { const match = voices.find((v) => v.toLowerCase() === clean.toLowerCase()) || clean; setPrefs((p) => ({ ...p, voice: match })); await replyNaturally("Perfect. Last setup bit: choose what I’m allowed to understand inside Zale. You can change this later.", 1300); return; }
+    if (!prefs.permissions) { const allowAll = /all|everything|yes|allow/i.test(clean); setPrefs((p) => ({ ...p, permissions: { chats: allowAll, friends: true, stories: allowAll, media: allowAll, activity: true }, onboarded: true })); await replyNaturally("Done. I’ll only use the access you’ve allowed, and I’ll still confirm important actions before doing them. What do you want to do?", 1400); return; }
     setThinking(true);
-    try { const response = await fetch("/api/zee", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: clean, history: messages.slice(-12), preferences: prefs }) }); const data = await response.json(); setMessages((m) => [...m, { role: "zee", text: data.reply || "I’m here. Try that again for me?" }]); }
-    catch { setMessages((m) => [...m, { role: "zee", text: "I couldn’t reach my brain just then. Try me again in a moment." }]); } finally { setThinking(false); }
+    try {
+      const started=Date.now();
+      const response = await fetch("/api/zee", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: clean, history: messages.slice(-12), preferences: prefs }) });
+      const data = await response.json();
+      const elapsed=Date.now()-started; if(elapsed<900) await wait(900-elapsed);
+      setMessages((m) => [...m, { role: "zee", text: data.reply || "I’m here. Try that again for me?" }]);
+    }
+    catch { await wait(700); setMessages((m) => [...m, { role: "zee", text: "I couldn’t reach my brain just then. Try me again in a moment." }]); }
+    finally { setThinking(false); }
   }
 
   function startListening() { const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition; setOpen(true); localStorage.setItem("zale-zee-last-active", String(Date.now())); if (!Ctor) { setMessages((m) => [...m, { role: "zee", text: "Voice listening isn’t supported by this browser yet, but you can type to me." }]); return; } recognition.current?.stop(); const r = new Ctor(); r.continuous = false; r.interimResults = false; r.lang = "en"; r.onresult = (event) => { const text = event.results[0]?.[0]?.transcript || ""; setInput(text); void ask(text); }; r.onend = () => setListening(false); recognition.current = r; setListening(true); r.start(); }
