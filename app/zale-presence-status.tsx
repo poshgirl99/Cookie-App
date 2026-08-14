@@ -23,7 +23,8 @@ export default function ZalePresenceStatus() {
     let refresh: number | undefined;
 
     const touchPresence = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user || stopped) return;
       await supabase.from("profiles").update({ last_active_at: new Date().toISOString() }).eq("id", user.id);
     };
@@ -41,7 +42,7 @@ export default function ZalePresenceStatus() {
 
     void touchPresence();
     void updateHeader();
-    heartbeat = window.setInterval(() => void touchPresence(), 45000);
+    heartbeat = window.setInterval(() => void touchPresence(), 60000);
     refresh = window.setInterval(() => void updateHeader(), 15000);
     const observer = new MutationObserver(() => void updateHeader());
     observer.observe(document.body, { childList: true, subtree: true });
