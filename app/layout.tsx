@@ -9,6 +9,7 @@ import ZalePushNotifications from "./zale-push-notifications";
 import ZalePresenceStatus from "./zale-presence-status";
 import ZeeAI from "./zee-ai";
 import ZeeChatList from "./zee-chat-list";
+import CookieAliasSync from "./cookie-alias-sync";
 
 export const metadata: Metadata = { title: "Cookie", description: "Follow the crumb trail." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4dfbd" };
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <FaithHeaderLink />
         <ZaleSocialEnhancements />
+        <CookieAliasSync />
         <ZalePushNotifications />
         <ZalePresenceStatus />
         <ZeeAI />
