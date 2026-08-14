@@ -1,10 +1,10 @@
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch {}
-  event.waitUntil(self.registration.showNotification(data.title || 'Zale', {
+  event.waitUntil(self.registration.showNotification(data.title || 'Cookie', {
     body: data.body || 'New notification',
-    icon: '/zale-logo.svg',
-    tag: `${data.type || 'zale'}-${Date.now()}`,
+    icon: '/cookie-logo-deeper-bite.png',
+    tag: `${data.type || 'cookie'}-${Date.now()}`,
     renotify: true,
     vibrate: [140, 70, 140],
     data: { url: data.url || '/' }
