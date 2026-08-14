@@ -11,6 +11,7 @@ import ZaleSocialEnhancements from "./zale-social-enhancements";
 import ZalePushNotifications from "./zale-push-notifications";
 import ZalePresenceStatus from "./zale-presence-status";
 import ZeeAI from "./zee-ai";
+import ZeeChatList from "./zee-chat-list";
 
 export const metadata: Metadata = { title: "Zale", description: "Your people. Your space." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#24112f" };
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ZalePushNotifications />
         <ZalePresenceStatus />
         <ZeeAI />
+        <ZeeChatList />
         <StorySentFeedback />
         <InstantDeleteFeedback />
       </body>
