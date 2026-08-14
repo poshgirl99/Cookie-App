@@ -3,8 +3,7 @@ self.addEventListener('push', event => {
   try { data = event.data ? event.data.json() : {}; } catch {}
   event.waitUntil(self.registration.showNotification(data.title || 'Zale', {
     body: data.body || 'New notification',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: '/zale-logo.svg',
     tag: `${data.type || 'zale'}-${Date.now()}`,
     renotify: true,
     vibrate: [140, 70, 140],
