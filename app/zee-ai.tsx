@@ -10,16 +10,37 @@ declare global { interface Window { SpeechRecognition?: SpeechRecognitionCtor; w
 const START: Msg[] = [{ role:"coco", text:"Hey 👋 I’m Coco, your Cookie assistant. What should I call you?", createdAt:Date.now() }];
 const voices = ["Warm","Bright","Calm","Deep"];
 const wait = (ms:number) => new Promise(resolve => window.setTimeout(resolve, ms));
+const cleanAssistantName = (value?: string) => {
+  const name=(value||"").trim();
+  if(!name || /^(zee|zee ai)$/i.test(name)) return "Coco";
+  return name;
+};
 
 export default function ZeeAI(){
   const [open,setOpen]=useState(false),[listening,setListening]=useState(false),[thinking,setThinking]=useState(false),[profileOpen,setProfileOpen]=useState(false),[regularChatOpen,setRegularChatOpen]=useState(false);
   const [input,setInput]=useState(""); const [messages,setMessages]=useState<Msg[]>(START); const [prefs,setPrefs]=useState<Prefs>({});
   const holdTimer=useRef<number|null>(null); const recognition=useRef<InstanceType<SpeechRecognitionCtor>|null>(null); const endRef=useRef<HTMLDivElement|null>(null);
-  const cocoName=prefs.cocoDisplayName?.trim()||"Coco";
+  const cocoName=cleanAssistantName(prefs.cocoDisplayName);
 
   useEffect(()=>{
-    const saved=localStorage.getItem("cookie-coco-messages")||localStorage.getItem("zale-zee-messages"); if(saved) try{ const parsed=JSON.parse(saved); setMessages(parsed.map((m: any)=>({...m,role:m.role==="zee"?"coco":m.role}))); }catch{}
-    const p=localStorage.getItem("cookie-coco-prefs")||localStorage.getItem("zale-zee-prefs"); if(p) try{ const old=JSON.parse(p); setPrefs({...old,cocoDisplayName:old.cocoDisplayName||old.zeeDisplayName}); }catch{}
+    const saved=localStorage.getItem("cookie-coco-messages")||localStorage.getItem("zale-zee-messages");
+    if(saved) try{
+      const parsed=JSON.parse(saved);
+      setMessages(parsed.map((m:any)=>({
+        ...m,
+        role:m.role==="zee"?"coco":m.role,
+        text:typeof m.text==="string"?m.text.replace(/\bZee AI\b/g,"Coco").replace(/\bZee\b/g,"Coco").replace(/\bZale\b/g,"Cookie"):m.text
+      }))
+    }catch{}
+    const p=localStorage.getItem("cookie-coco-prefs")||localStorage.getItem("zale-zee-prefs");
+    if(p) try{
+      const old=JSON.parse(p);
+      const migratedName=cleanAssistantName(old.cocoDisplayName||old.zeeDisplayName);
+      const migrated={...old,cocoDisplayName:migratedName};
+      delete migrated.zeeDisplayName;
+      setPrefs(migrated);
+      localStorage.setItem("cookie-coco-prefs",JSON.stringify(migrated));
+    }catch{}
     const openCoco=()=>{setOpen(true);localStorage.setItem("cookie-coco-last-active",String(Date.now()));};
     window.addEventListener("zale:open-zee",openCoco); return()=>window.removeEventListener("zale:open-zee",openCoco);
   },[]);
@@ -30,7 +51,7 @@ export default function ZeeAI(){
   },[open]);
 
   useEffect(()=>{localStorage.setItem("cookie-coco-messages",JSON.stringify(messages));endRef.current?.scrollIntoView({behavior:"smooth"});},[messages,thinking]);
-  useEffect(()=>{localStorage.setItem("cookie-coco-prefs",JSON.stringify(prefs));},[prefs]);
+  useEffect(()=>{localStorage.setItem("cookie-coco-prefs",JSON.stringify({...prefs,cocoDisplayName:cleanAssistantName(prefs.cocoDisplayName)}));},[prefs]);
 
   async function replyNaturally(text:string,delay=1100){setThinking(true);await wait(delay);setMessages(m=>[...m,{role:"coco",text,createdAt:Date.now()}]);setThinking(false);}
   async function ask(text:string){
