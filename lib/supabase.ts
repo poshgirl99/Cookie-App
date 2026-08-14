@@ -9,7 +9,8 @@ const makeBrowserClient = () =>
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        flowType: "implicit",
+        flowType: "pkce",
+        storageKey: "zale-auth-v2",
       },
     },
   );
