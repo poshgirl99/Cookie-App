@@ -12,7 +12,7 @@ const voices = ["Warm", "Bright", "Calm", "Deep"];
 const wait = (ms:number) => new Promise(resolve => window.setTimeout(resolve, ms));
 
 export default function ZeeAI() {
-  const [open, setOpen] = useState(false), [listening, setListening] = useState(false), [thinking, setThinking] = useState(false), [profileOpen, setProfileOpen] = useState(false);
+  const [open, setOpen] = useState(false), [listening, setListening] = useState(false), [thinking, setThinking] = useState(false), [profileOpen, setProfileOpen] = useState(false), [regularChatOpen, setRegularChatOpen] = useState(false);
   const [input, setInput] = useState(""); const [messages, setMessages] = useState<ZeeMessage[]>(START); const [prefs, setPrefs] = useState<ZeePrefs>({});
   const holdTimer = useRef<number | null>(null); const recognition = useRef<InstanceType<SpeechRecognitionCtor> | null>(null); const endRef = useRef<HTMLDivElement | null>(null);
   const zeeName = prefs.zeeDisplayName?.trim() || "Zee AI";
@@ -24,6 +24,21 @@ export default function ZeeAI() {
     window.addEventListener("zale:open-zee", openZee);
     return () => window.removeEventListener("zale:open-zee", openZee);
   }, []);
+
+  useEffect(() => {
+    const detectRegularChat = () => {
+      const compose = document.querySelector(".chat-compose, .compose-row");
+      const header = document.querySelector(".chat-head");
+      const visible = !!(compose && header && !document.querySelector(".zee-native-chat"));
+      setRegularChatOpen(visible);
+    };
+    detectRegularChat();
+    const observer = new MutationObserver(detectRegularChat);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+    window.addEventListener("popstate", detectRegularChat);
+    return () => { observer.disconnect(); window.removeEventListener("popstate", detectRegularChat); };
+  }, [open]);
+
   useEffect(() => { localStorage.setItem("zale-zee-messages", JSON.stringify(messages)); endRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages, thinking]);
   useEffect(() => { localStorage.setItem("zale-zee-prefs", JSON.stringify(prefs)); }, [prefs]);
 
@@ -53,23 +68,10 @@ export default function ZeeAI() {
   function changeDisplayName(){ const next=window.prompt("Display name for Zee",zeeName); if(next?.trim()) setPrefs(p=>({...p,zeeDisplayName:next.trim()})); }
 
   return <>
-    <button className="zee-quick" aria-label="Open Zee AI" title="Hold to talk to Zee" onClick={() => setOpen(true)} onPointerDown={() => { holdTimer.current = window.setTimeout(startListening, 500); }} onPointerUp={() => { if (holdTimer.current) window.clearTimeout(holdTimer.current); }}><span className="zee-z">Z</span></button>
+    {!regularChatOpen && !open && <button className="zee-quick" aria-label="Open Zee AI" title="Hold to talk to Zee" onClick={() => setOpen(true)} onPointerDown={() => { holdTimer.current = window.setTimeout(startListening, 500); }} onPointerUp={() => { if (holdTimer.current) window.clearTimeout(holdTimer.current); }}><span className="zee-z">Z</span></button>}
     {open && <div className="zee-native-chat chat-pane" role="dialog" aria-label="Zee AI chat">
-      <div className="chat-head">
-        <button className="chat-back" onClick={()=>{setOpen(false);setProfileOpen(false)}}>‹</button>
-        <button className="chat-profile-trigger" type="button" onClick={()=>setProfileOpen(true)} aria-label={`View ${zeeName} profile`}>
-          <span className="zee-native-avatar">Z</span>
-          <span><b>{zeeName} <i className="zee-ai-chip">AI</i></b><small className={thinking || listening ? "live-activity" : ""}>{listening ? "listening…" : thinking ? "typing…" : "Your Zale assistant"}</small></span>
-        </button>
-        <select aria-label="Automatic message deletion" defaultValue="never"><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select>
-      </div>
-      <div className="message-stream zee-native-stream">
-        {messages.map((m,i)=><div key={i} className={`message-row ${m.role === "user" ? "mine" : "theirs"}`}><div className="message-bubble">{m.text}<small>{new Date(m.createdAt || Date.now()).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · {m.role === "user" ? "Sent" : "Received"}</small></div></div>)}
-        {prefs.name && !prefs.voice && <div className="zee-native-actions">{voices.map(v=><button key={v} onClick={()=>void ask(v)}>{v}</button>)}</div>}
-        {prefs.voice && !prefs.permissions && <div className="zee-native-actions"><button onClick={()=>void ask("Allow all")}>Allow suggested access</button><button onClick={()=>void ask("Limited")}>Use limited access</button></div>}
-        {thinking && <div className="message-row theirs"><div className="message-bubble zee-typing-dots">•••</div></div>}
-        <div ref={endRef}/>
-      </div>
+      <div className="chat-head"><button className="chat-back" onClick={()=>{setOpen(false);setProfileOpen(false)}}>‹</button><button className="chat-profile-trigger" type="button" onClick={()=>setProfileOpen(true)} aria-label={`View ${zeeName} profile`}><span className="zee-native-avatar">Z</span><span><b>{zeeName} <i className="zee-ai-chip">AI</i></b><small className={thinking || listening ? "live-activity" : ""}>{listening ? "listening…" : thinking ? "typing…" : "Your Zale assistant"}</small></span></button><select aria-label="Automatic message deletion" defaultValue="never"><option value="after_viewing">After viewing</option><option value="24_hours">Within 24 hours</option><option value="2_days">Within 2 days</option><option value="never">Never delete</option></select></div>
+      <div className="message-stream zee-native-stream">{messages.map((m,i)=><div key={i} className={`message-row ${m.role === "user" ? "mine" : "theirs"}`}><div className="message-bubble">{m.text}<small>{new Date(m.createdAt || Date.now()).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · {m.role === "user" ? "Sent" : "Received"}</small></div></div>)}{prefs.name && !prefs.voice && <div className="zee-native-actions">{voices.map(v=><button key={v} onClick={()=>void ask(v)}>{v}</button>)}</div>}{prefs.voice && !prefs.permissions && <div className="zee-native-actions"><button onClick={()=>void ask("Allow all")}>Allow suggested access</button><button onClick={()=>void ask("Limited")}>Use limited access</button></div>}{thinking && <div className="message-row theirs"><div className="message-bubble zee-typing-dots">•••</div></div>}<div ref={endRef}/></div>
       <div className="chat-compose"><div className="compose-row"><button title="Emoji">☺</button><button className="attach" title="More">＋</button><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();void ask(input)}}} placeholder="Message..."/><button className={listening?"picker-active":""} onClick={startListening} title="Talk to Zee">🎙</button><button onClick={()=>void ask(input)} title="Send">➤</button></div></div>
       {profileOpen && <div className="zee-profile-backdrop" onClick={()=>setProfileOpen(false)}><div className="zee-profile-card" onClick={e=>e.stopPropagation()}><button className="zee-profile-close" onClick={()=>setProfileOpen(false)}>×</button><span className="zee-profile-avatar">Z</span><h2>{zeeName} <i className="zee-ai-chip">AI</i></h2><p>Your personal AI inside Zale.</p><button onClick={changeDisplayName}>Change display name</button><button onClick={()=>{setProfileOpen(false);startListening()}}>Talk to Zee</button><small>Zee only uses the Zale access you permit.</small></div></div>}
     </div>}
