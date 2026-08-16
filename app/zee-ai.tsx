@@ -24,23 +24,27 @@ export default function ZeeAI(){
 
   useEffect(()=>{
     const saved=localStorage.getItem("cookie-coco-messages")||localStorage.getItem("zale-zee-messages");
-    if(saved) try{
-      const parsed=JSON.parse(saved);
-      setMessages(parsed.map((m:any)=>({
-        ...m,
-        role:m.role==="zee"?"coco":m.role,
-        text:typeof m.text==="string"?m.text.replace(/\bZee AI\b/g,"Coco").replace(/\bZee\b/g,"Coco").replace(/\bZale\b/g,"Cookie"):m.text
-      }))
-    }catch{}
+    if(saved){
+      try{
+        const parsed=JSON.parse(saved);
+        setMessages(parsed.map((m:any)=>({
+          ...m,
+          role:m.role==="zee"?"coco":m.role,
+          text:typeof m.text==="string"?m.text.replace(/\bZee AI\b/g,"Coco").replace(/\bZee\b/g,"Coco").replace(/\bZale\b/g,"Cookie"):m.text
+        })));
+      }catch{}
+    }
     const p=localStorage.getItem("cookie-coco-prefs")||localStorage.getItem("zale-zee-prefs");
-    if(p) try{
-      const old=JSON.parse(p);
-      const migratedName=cleanAssistantName(old.cocoDisplayName||old.zeeDisplayName);
-      const migrated={...old,cocoDisplayName:migratedName};
-      delete migrated.zeeDisplayName;
-      setPrefs(migrated);
-      localStorage.setItem("cookie-coco-prefs",JSON.stringify(migrated));
-    }catch{}
+    if(p){
+      try{
+        const old=JSON.parse(p);
+        const migratedName=cleanAssistantName(old.cocoDisplayName||old.zeeDisplayName);
+        const migrated={...old,cocoDisplayName:migratedName};
+        delete migrated.zeeDisplayName;
+        setPrefs(migrated);
+        localStorage.setItem("cookie-coco-prefs",JSON.stringify(migrated));
+      }catch{}
+    }
     const openCoco=()=>{setOpen(true);localStorage.setItem("cookie-coco-last-active",String(Date.now()));};
     window.addEventListener("zale:open-zee",openCoco); return()=>window.removeEventListener("zale:open-zee",openCoco);
   },[]);
