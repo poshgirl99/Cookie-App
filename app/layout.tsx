@@ -10,6 +10,7 @@ import ZalePresenceStatus from "./zale-presence-status";
 import ZeeAI from "./zee-ai";
 import ZeeChatList from "./zee-chat-list";
 import CookieAliasSync from "./cookie-alias-sync";
+import CookieAliasCloudSync from "./cookie-alias-cloud-sync";
 import ChatCorePolish from "./chat-core-polish";
 import CookieNotificationCenter from "./cookie-notification-center";
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <FaithHeaderLink />
         <ZaleSocialEnhancements />
         <CookieAliasSync />
+        <CookieAliasCloudSync />
         <ZalePushNotifications />
         <CookieNotificationCenter />
         <ZalePresenceStatus />
