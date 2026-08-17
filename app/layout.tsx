@@ -13,6 +13,7 @@ import CookieAliasSync from "./cookie-alias-sync";
 import CookieAliasCloudSync from "./cookie-alias-cloud-sync";
 import ChatCorePolish from "./chat-core-polish";
 import CookieNotificationCenter from "./cookie-notification-center";
+import CookieHeaderActions from "./cookie-header-actions";
 
 export const metadata: Metadata = { title: "Cookie", description: "Follow the crumb trail." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4dfbd" };
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CookieAliasCloudSync />
         <ZalePushNotifications />
         <CookieNotificationCenter />
+        <CookieHeaderActions />
         <ZalePresenceStatus />
         <ZeeAI />
         <ZeeChatList />
