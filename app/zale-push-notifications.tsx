@@ -22,7 +22,7 @@ export default function ZalePushNotifications() {
     let cancelled = false;
 
     async function syncSubscription(userId?: string | null) {
-      const reg = await navigator.serviceWorker.register("/zale-sw.js", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("/cookie-sw.js", { updateViaCache: "none" });
       await reg.update().catch(() => undefined);
       const sub = await reg.pushManager.getSubscription();
 
