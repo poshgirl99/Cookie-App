@@ -31,10 +31,10 @@ export default function CookieNotificationCenter() {
   }
 
   useEffect(() => {
-    let button: HTMLButtonElement | null = null;
-    const bind = () => {
-      button = document.querySelector('button[aria-label="Notifications"]') as HTMLButtonElement | null;
-      if (!button) return false;
+    let cleanup: (() => void) | undefined;
+    const bind = (): (() => void) | undefined => {
+      const button = document.querySelector('button[aria-label="Notifications"]') as HTMLButtonElement | null;
+      if (!button) return undefined;
       const handler = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -42,10 +42,10 @@ export default function CookieNotificationCenter() {
         void load();
       };
       button.addEventListener("click", handler, true);
-      return () => button?.removeEventListener("click", handler, true);
+      return () => button.removeEventListener("click", handler, true);
     };
 
-    let cleanup = bind();
+    cleanup = bind();
     const observer = new MutationObserver(() => {
       if (!cleanup) cleanup = bind();
     });
@@ -65,7 +65,7 @@ export default function CookieNotificationCenter() {
 
     return () => {
       observer.disconnect();
-      if (cleanup) cleanup();
+      cleanup?.();
       authListener.subscription.unsubscribe();
     };
   }, [supabase]);
