@@ -17,6 +17,7 @@ import CookieHeaderActions from "./cookie-header-actions";
 import CookieMorePanel from "./cookie-more-panel";
 import CookieChatOpener from "./cookie-chat-opener";
 import CookieSettingsPanel from "./cookie-settings-panel";
+import CookieMorePanelMotion from "./cookie-more-panel-motion";
 
 export const metadata: Metadata = { title: "Cookie", description: "Follow the crumb trail." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4dfbd" };
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CookieNotificationCenter />
         <CookieHeaderActions />
         <CookieMorePanel />
+        <CookieMorePanelMotion />
         <CookieChatOpener />
         <CookieSettingsPanel />
         <ZalePresenceStatus />
