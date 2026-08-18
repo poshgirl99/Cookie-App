@@ -13,7 +13,24 @@ const steps=[
  {title:"A Few Things to Know",text:"Save messages you want to keep, manage your Best Friends, use your QR code to connect quickly, and visit Help whenever you need support."},
  {title:"You’re all set 🍪",text:"Cookie is yours. Start chatting, sharing and connecting.",finish:true}
 ];
-function findTarget(t?:string){if(!t)return null;const qs:string[] = t==="chats"?["[data-tab='chats']","button[aria-label*='Chat']","nav button:first-child"]:t==="filters"?["[data-chat-filters]","button"]:t==="friends"?["button[aria-label*='friend' i]","button"]:t==="top"?["button[aria-label='More']","button[aria-label*='notification' i]"]:t==="stories"?["[data-tab='stories']","button[aria-label*='Stories' i]"]:t==="crumbs"?["[data-tab='crumbs']","button[aria-label*='Crumbs' i]"]:t==="profile"?["[data-tab='profile']","button[aria-label*='Profile' i]"]:[];for(const q of qs){const all=[...document.querySelectorAll(q)] as HTMLElement[];const el=all.find(x=>{const s=getComputedStyle(x);return s.display!=="none"&&s.visibility!=="hidden"&&x.getBoundingClientRect().width>0});if(el)return el}return null}
+function visible(el:HTMLElement){const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>0&&r.height>0}
+function findTarget(t?:string){
+ if(!t)return null;
+ if(t==="filters"){
+   const direct=document.querySelector("[data-chat-filters]") as HTMLElement|null;
+   if(direct&&visible(direct))return direct;
+   const labels=new Set(["all","unread","groups","best friends","unreplied"]);
+   const buttons=([...document.querySelectorAll("button")] as HTMLElement[]).filter(b=>labels.has((b.textContent||"").trim().toLowerCase())&&visible(b));
+   if(buttons.length>=3){
+     let p:HTMLElement|null=buttons[0].parentElement;
+     while(p&&p!==document.body){const text=(p.textContent||"").toLowerCase();if([...labels].every(x=>text.includes(x)))return p;p=p.parentElement}
+     return buttons[0].parentElement||buttons[0];
+   }
+   return null;
+ }
+ const qs:string[] = t==="chats"?["[data-tab='chats']","button[aria-label*='Chat']","nav button:first-child"]:t==="friends"?["button[aria-label*='friend' i]"]:t==="top"?["button[aria-label='More']","button[aria-label*='notification' i]"]:t==="stories"?["[data-tab='stories']","button[aria-label*='Stories' i]"]:t==="crumbs"?["[data-tab='crumbs']","button[aria-label*='Crumbs' i]"]:t==="profile"?["[data-tab='profile']","button[aria-label*='Profile' i]"]:[];
+ for(const q of qs){const all=[...document.querySelectorAll(q)] as HTMLElement[];const el=all.find(visible);if(el)return el}return null
+}
 export default function CookieOnboardingTutorial(){const supabase=useMemo(()=>createClient(),[]);const [uid,setUid]=useState("");const [open,setOpen]=useState(false);const [step,setStep]=useState(0);const [box,setBox]=useState<DOMRect|null>(null);
  useEffect(()=>{void init();const replay=()=>{setStep(0);setOpen(true);void persist(0,"in_progress",true)};window.addEventListener("cookie:replay-tutorial",replay);return()=>window.removeEventListener("cookie:replay-tutorial",replay)},[]);
  useEffect(()=>{if(!open)return;const update=()=>setBox(findTarget(steps[step]?.target)?.getBoundingClientRect()||null);update();const id=setTimeout(update,250);window.addEventListener("resize",update);return()=>{clearTimeout(id);window.removeEventListener("resize",update)}},[open,step]);
