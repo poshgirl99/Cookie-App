@@ -14,10 +14,15 @@ const steps=[
  {title:"You’re all set 🍪",text:"Cookie is yours. Start chatting, sharing and connecting.",finish:true}
 ];
 function visible(el:HTMLElement){const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=="none"&&s.visibility!=="hidden"&&r.width>0&&r.height>0}
-function buttonByText(text:string){return ([...document.querySelectorAll("button")] as HTMLButtonElement[]).find(b=>(b.textContent||"").trim().toLowerCase()===text.toLowerCase()&&visible(b))||null}
+function navButton(label:string){
+ const buttons=[...document.querySelectorAll("nav button")] as HTMLButtonElement[];
+ return buttons.find(b=>((b.querySelector("small")?.textContent||b.textContent||"").trim().toLowerCase()===label.toLowerCase())&&visible(b))||null;
+}
 function findFriendSearch(){
+ const exact=document.querySelector('input[placeholder="Search a unique username"]') as HTMLInputElement|null;
+ if(exact&&visible(exact))return exact;
  const inputs=[...document.querySelectorAll("input")] as HTMLInputElement[];
- return inputs.find(i=>{const p=(i.placeholder||"").toLowerCase();return visible(i)&&(p.includes("username")||p.includes("friend")||p.includes("people"));})||null;
+ return inputs.find(i=>visible(i)&&(i.placeholder||"").toLowerCase().includes("unique username"))||null;
 }
 function findTarget(t?:string){
  if(!t)return null;
@@ -30,12 +35,21 @@ function findTarget(t?:string){
    return null;
  }
  if(t==="friends")return findFriendSearch();
- const qs:string[] = t==="chats"?["[data-tab='chats']","button[aria-label*='Chat']","nav button:first-child"]:t==="top"?["button[aria-label='More']","button[aria-label*='notification' i]"]:t==="stories"?["[data-tab='stories']","button[aria-label*='Stories' i]"]:t==="crumbs"?["[data-tab='crumbs']","button[aria-label*='Crumbs' i]"]:t==="profile"?["[data-tab='profile']","button[aria-label*='Profile' i]"]:[];
- for(const q of qs){const all=[...document.querySelectorAll(q)] as HTMLElement[];const el=all.find(visible);if(el)return el}return null
+ if(t==="chats")return navButton("Chats");
+ if(t==="stories")return navButton("Stories");
+ if(t==="crumbs")return navButton("Crumbs");
+ if(t==="profile")return navButton("Profile");
+ if(t==="top"){
+   const more=document.querySelector("button[aria-label='More']") as HTMLElement|null;
+   if(more&&visible(more))return more;
+   const notification=document.querySelector("button[aria-label='Notifications']") as HTMLElement|null;
+   if(notification&&visible(notification))return notification;
+ }
+ return null;
 }
 export default function CookieOnboardingTutorial(){const supabase=useMemo(()=>createClient(),[]);const [uid,setUid]=useState("");const [open,setOpen]=useState(false);const [step,setStep]=useState(0);const [box,setBox]=useState<DOMRect|null>(null);
  useEffect(()=>{void init();const replay=()=>{setStep(0);setOpen(true);void persist(0,"in_progress",true)};window.addEventListener("cookie:replay-tutorial",replay);return()=>window.removeEventListener("cookie:replay-tutorial",replay)},[]);
- useEffect(()=>{if(!open)return;let cancelled=false;const prepare=()=>{if(steps[step]?.target==="friends"&&!findFriendSearch()){const friendsBtn=buttonByText("Friends");if(friendsBtn)friendsBtn.click()}};const update=()=>{if(cancelled)return;prepare();setBox(findTarget(steps[step]?.target)?.getBoundingClientRect()||null)};update();const a=setTimeout(update,180),b=setTimeout(update,500),c=setTimeout(update,900);window.addEventListener("resize",update);return()=>{cancelled=true;clearTimeout(a);clearTimeout(b);clearTimeout(c);window.removeEventListener("resize",update)}},[open,step]);
+ useEffect(()=>{if(!open)return;let cancelled=false;const prepare=()=>{const target=steps[step]?.target;if(target==="friends"){const btn=navButton("Friends");if(btn&&!btn.classList.contains("active"))btn.click()}else if(target==="stories"){const btn=navButton("Stories");if(btn&&!btn.classList.contains("active"))btn.click()}else if(target==="crumbs"){const btn=navButton("Crumbs");if(btn&&!btn.classList.contains("active"))btn.click()}else if(target==="profile"){const btn=navButton("Profile");if(btn&&!btn.classList.contains("active"))btn.click()}else if((target==="chats"||target==="filters"||target==="top")){const btn=navButton("Chats");if(btn&&!btn.classList.contains("active"))btn.click()}};const update=()=>{if(cancelled)return;prepare();setBox(findTarget(steps[step]?.target)?.getBoundingClientRect()||null)};update();const timers=[120,280,520,900,1400].map(ms=>setTimeout(update,ms));window.addEventListener("resize",update);return()=>{cancelled=true;timers.forEach(clearTimeout);window.removeEventListener("resize",update)}},[open,step]);
  async function init(){const {data:{user}}=await supabase.auth.getUser();if(!user)return;setUid(user.id);const {data}=await supabase.from("onboarding_tutorial_progress").select("status,current_step").eq("user_id",user.id).maybeSingle();if(!data){await supabase.from("onboarding_tutorial_progress").insert({user_id:user.id,status:"not_started",current_step:0});setStep(0);setTimeout(()=>setOpen(true),900)}else if(data.status==="not_started"||data.status==="in_progress"){setStep(Math.min(Number(data.current_step)||0,9));setTimeout(()=>setOpen(true),900)}}
  async function persist(s:number,status:string,forceUid=false){const id=uid||(forceUid?(await supabase.auth.getUser()).data.user?.id:"");if(!id)return;await supabase.from("onboarding_tutorial_progress").upsert({user_id:id,status,current_step:s,started_at:status==="in_progress"?new Date().toISOString():undefined,completed_at:status==="completed"?new Date().toISOString():undefined,updated_at:new Date().toISOString()})}
  async function next(){if(step===9){await persist(10,"completed");setOpen(false);return}const n=step+1;setStep(n);await persist(n,"in_progress")}
