@@ -22,6 +22,7 @@ import CookieGlobalMotion from "./cookie-global-motion";
 import CookieOnboardingTutorial from "./cookie-onboarding-tutorial";
 import CookieTutorialReplayLink from "./cookie-tutorial-replay-link";
 import CookieTextStoryComposer from "./cookie-text-story-composer";
+import CookieFullEmojiPicker from "./cookie-full-emoji-picker";
 
 export const metadata: Metadata = { title: "Cookie", description: "Follow the crumb trail." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4dfbd" };
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CookieOnboardingTutorial />
         <CookieTutorialReplayLink />
         <CookieTextStoryComposer />
+        <CookieFullEmojiPicker />
         <ZalePresenceStatus />
         <ZeeAI />
         <ZeeChatList />
