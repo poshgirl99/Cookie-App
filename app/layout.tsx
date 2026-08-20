@@ -30,6 +30,7 @@ import CookieStoryAutoTextSize from "./cookie-story-auto-text-size";
 import CookieStoryLiveToastTimeout from "./cookie-story-live-toast-timeout";
 import CookieStoryViewers from "./cookie-story-viewers";
 import CookieBestFriendsRefresh from "./cookie-best-friends-refresh";
+import CookieUxHardening from "./cookie-ux-hardening";
 
 export const metadata: Metadata = { title: "Cookie", description: "Follow the crumb trail." };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f4dfbd" };
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CookieStoryLiveToastTimeout />
         <CookieStoryViewers />
         <CookieBestFriendsRefresh />
+        <CookieUxHardening />
         <ZalePresenceStatus />
         <ZeeAI />
         <ZeeChatList />
